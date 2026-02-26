@@ -158,12 +158,47 @@ Interactive docs (Swagger UI) available at **http://localhost:8000/docs** when t
 - [Product Requirements Document](docs/PRD.md)
 - [Architecture](docs/ARCHITECTURE.md)
 
+## Current Status
+
+**v0.1 — Complete**
+
+| Area | Status |
+|---|---|
+| Interactive grid canvas (square / rect / hex) | Done |
+| Lane drawing, bidirectional toggle, edge deletion | Done |
+| Semantic node types + layer visibility | Done |
+| Undo / redo (50-step linear history) | Done |
+| Connectivity validation + BFS path preview | Done |
+| JSON + PNG export | Done |
+| FastAPI backend + PostgreSQL persistence | Done |
+| Offline-first localStorage fallback | Done |
+| Frontend tests — 157 tests, 100% coverage | Done |
+| Backend tests — 11 tests, all routes | Done |
+
 ## Roadmap
 
-| Version | Feature |
-|---------|---------|
-| v0.2    | User auth (JWT), shareable map links |
-| v0.3    | ROS 2 / nav2 costmap export |
-| v0.4    | VDA5050-compatible graph export for AMR fleets |
-| v0.5    | React Native mobile app (iOS + Android) |
-| v1.0    | Real-time collaboration, robot telemetry overlay |
+### v0.2 — Auth & Sharing
+- JWT-based user authentication (login / register)
+- Map ownership — users only see their own maps
+- Shareable read-only map links (token-based)
+- Alembic migrations wired up for schema evolution
+
+### v0.3 — ROS 2 / nav2 Export
+- Export map as a nav2-compatible costmap (YAML + PGM)
+- Cell size calibration drives real-world resolution
+- Blocked cells → occupied pixels; lanes → free space
+
+### v0.4 — VDA5050 Fleet Export
+- Export navigation graph in VDA5050 JSON format
+- Node and edge IDs aligned to VDA5050 topology spec
+- Supports AMR fleet management systems out of the box
+
+### v0.5 — Mobile App
+- React Native app (`apps/mobile/`) for iOS + Android
+- Touch-first lane drawing optimized for tablets
+- Shares all domain types via `@naxa/core`
+
+### v1.0 — Collaboration & Telemetry
+- Real-time multi-user map editing (WebSocket / CRDT)
+- Live robot telemetry overlay on the canvas
+- Map versioning and change history

@@ -20,6 +20,30 @@ naxa/
 └── README.md
 ```
 
+## Current State (last updated 2026-02-26)
+
+### What is complete (v0.1)
+- Full React frontend: grid canvas (square/rect/hex), lane drawing, node types, layers,
+  undo/redo (50-step), BFS path preview, connectivity validation, JSON + PNG export
+- FastAPI backend: full CRUD for GridMap, PostgreSQL via SQLModel, offline localStorage fallback
+- Tests: 157 frontend tests (Vitest + Istanbul, 100% coverage on lib/ + store/),
+  11 backend tests (pytest, SQLite in-memory, all routes covered)
+- Docker Compose: postgres + api + web, healthcheck-gated startup with retry backoff in lifespan
+- GitHub: https://github.com/ps-icode/naxa.git (remote: origin, branch: main)
+
+### What is next (v0.2)
+- JWT auth: login/register, map ownership, shareable read-only links
+- Alembic migrations wired up
+- See docs/PRD.md §9 for full roadmap
+
+### Key tooling notes
+- JS tooling (bun, vitest) runs inside Docker — host has no bun in PATH
+- To run frontend tests: `docker run --rm -v $(pwd):/naxa -w /naxa/apps/web naxa-web:latest bun test:coverage`
+- To run backend tests: `docker run --rm -v $(pwd)/apps/api:/app naxa-api:latest uv run pytest tests/ -v`
+- Coverage provider must be **istanbul** (not v8) — Bun uses JavaScriptCore, v8 coverage APIs not available
+- `@vitest/coverage-istanbul` comment-based ignores are stripped by Bun's TS transform — remove dead code instead
+- Backend conftest.py: must set `os.environ["DATABASE_URL"]` before any src imports AND monkey-patch `_db.engine`
+
 ## Running Locally
 
 ```bash
