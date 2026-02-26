@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useUIStore } from '../../store/uiStore'
 import type { TraceRoute } from '../../store/uiStore'
+import type { ValidationResult } from '../../lib/graph'
 
 function freshStore(): void {
   useUIStore.setState({
@@ -139,13 +140,21 @@ describe('setShowNewMapModal', () => {
 })
 
 describe('setValidationResult', () => {
+  const fullResult: ValidationResult = {
+    unreachable: ['c1'],
+    unreachableDestinations: ['c1'],
+    unreachableSources: [],
+    unreachableCharging: [],
+    unreachableParking: [],
+  }
+
   it('sets validationResult', () => {
-    useUIStore.getState().setValidationResult({ unreachable: ['c1'] })
-    expect(useUIStore.getState().validationResult).toEqual({ unreachable: ['c1'] })
+    useUIStore.getState().setValidationResult(fullResult)
+    expect(useUIStore.getState().validationResult).toEqual(fullResult)
   })
 
   it('clears validationResult when set to null', () => {
-    useUIStore.getState().setValidationResult({ unreachable: ['c1'] })
+    useUIStore.getState().setValidationResult(fullResult)
     useUIStore.getState().setValidationResult(null)
     expect(useUIStore.getState().validationResult).toBeNull()
   })

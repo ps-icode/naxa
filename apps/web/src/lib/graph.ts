@@ -41,17 +41,52 @@ export function bfsPath(fromId: string, toId: string, edges: Edge[]): string[] |
   return null
 }
 
-export function validateConnectivity(map: GridMap): { unreachable: string[] } {
-  const sources = map.cells.filter(c => c.nodeType === 'source')
-  const destinations = map.cells.filter(c => c.nodeType === 'destination')
-  if (sources.length === 0 || destinations.length === 0) return { unreachable: [] }
+export interface ValidationResult {
+  unreachable: string[]              // union of all below — used by canvas for red highlights
+  unreachableDestinations: string[]  // destinations not reachable from any source (forward)
+  unreachableSources: string[]       // sources not reachable from any destination (return path)
+  unreachableCharging: string[]      // charging not reachable from any source
+  unreachableParking: string[]       // parking not reachable from any source
+}
 
-  const unreachable: string[] = []
-  for (const dest of destinations) {
-    const reachable = sources.some(src => bfsPath(src.id, dest.id, map.edges) !== null)
-    if (!reachable) unreachable.push(dest.id)
+export function validateConnectivity(map: GridMap): ValidationResult {
+  const sources      = map.cells.filter(c => c.nodeType === 'source')
+  const destinations = map.cells.filter(c => c.nodeType === 'destination')
+  const charging     = map.cells.filter(c => c.nodeType === 'charging')
+  const parking      = map.cells.filter(c => c.nodeType === 'parking')
+
+  if (sources.length === 0 || destinations.length === 0) {
+    return { unreachable: [], unreachableDestinations: [], unreachableSources: [],
+             unreachableCharging: [], unreachableParking: [] }
   }
-  return { unreachable }
+
+  const adj = buildAdj(map.edges)
+
+  function bfsFrom(startIds: string[]): Set<string> {
+    const visited = new Set<string>(startIds)
+    const queue = [...startIds]
+    while (queue.length > 0) {
+      const curr = queue.shift()!
+      for (const next of adj.get(curr) ?? []) {
+        if (!visited.has(next)) { visited.add(next); queue.push(next) }
+      }
+    }
+    return visited
+  }
+
+  const reachableFromSources      = bfsFrom(sources.map(c => c.id))
+  const reachableFromDestinations = bfsFrom(destinations.map(c => c.id))
+
+  const unreachableDestinations = destinations.filter(c => !reachableFromSources.has(c.id)).map(c => c.id)
+  const unreachableSources      = sources.filter(c => !reachableFromDestinations.has(c.id)).map(c => c.id)
+  const unreachableCharging     = charging.filter(c => !reachableFromSources.has(c.id)).map(c => c.id)
+  const unreachableParking      = parking.filter(c => !reachableFromSources.has(c.id)).map(c => c.id)
+  const unreachable             = [...new Set([
+    ...unreachableDestinations, ...unreachableSources,
+    ...unreachableCharging, ...unreachableParking,
+  ])]
+
+  return { unreachable, unreachableDestinations, unreachableSources, unreachableCharging, unreachableParking }
 }
 
 const TRACE_PALETTE = [

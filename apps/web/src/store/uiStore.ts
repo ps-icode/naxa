@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { NodeType } from '@naxa/core'
+import type { ValidationResult } from '../lib/graph'
 
 export type Tool = 'draw' | 'type' | 'erase' | 'path'
 
@@ -20,7 +21,7 @@ interface UIStore {
   zoom: number
   pan: { x: number; y: number }
   showNewMapModal: boolean
-  validationResult: { unreachable: string[] } | null
+  validationResult: ValidationResult | null
   toast: { message: string; type: 'success' | 'error' } | null
   // Trace animation
   traceRoutes: TraceRoute[]
@@ -36,7 +37,7 @@ interface UIStore {
   setZoom: (z: number) => void
   setPan: (p: { x: number; y: number }) => void
   setShowNewMapModal: (v: boolean) => void
-  setValidationResult: (r: { unreachable: string[] } | null) => void
+  setValidationResult: (r: ValidationResult | null) => void
   setPathResult: (p: string[] | null) => void
   showToast: (message: string, type?: 'success' | 'error') => void
   clearToast: () => void

@@ -47,12 +47,17 @@ export default function Toolbar() {
 
   const handleValidate = () => {
     if (!map) return
-    const result = validateConnectivity(map)
-    setValidationResult(result)
-    if (result.unreachable.length === 0) {
-      showToast('All destinations reachable ✓')
+    const r = validateConnectivity(map)
+    setValidationResult(r)
+    if (r.unreachable.length === 0) {
+      showToast('All nodes reachable ✓')
     } else {
-      showToast(`${result.unreachable.length} unreachable destination(s) — highlighted in red`, 'error')
+      const parts: string[] = []
+      if (r.unreachableDestinations.length) parts.push(`${r.unreachableDestinations.length} dest`)
+      if (r.unreachableSources.length) parts.push(`${r.unreachableSources.length} src`)
+      if (r.unreachableCharging.length) parts.push(`${r.unreachableCharging.length} charge`)
+      if (r.unreachableParking.length) parts.push(`${r.unreachableParking.length} park`)
+      showToast(`Unreachable: ${parts.join(', ')} — highlighted in red`, 'error')
     }
   }
 
