@@ -91,7 +91,7 @@ export const NODE_TYPE_COLORS: Record<NodeType, string> = {
 }
 
 export const DEFAULT_LAYERS: Layer[] = [
-  { id: 'layer-lane',        name: 'Lanes',        nodeType: 'lane',        visible: true, color: NODE_TYPE_COLORS.lane },
+  { id: 'layer-lane',        name: 'Boundaries',   nodeType: 'lane',        visible: true, color: NODE_TYPE_COLORS.lane },
   { id: 'layer-source',      name: 'Sources',      nodeType: 'source',      visible: true, color: NODE_TYPE_COLORS.source },
   { id: 'layer-destination', name: 'Destinations', nodeType: 'destination', visible: true, color: NODE_TYPE_COLORS.destination },
   { id: 'layer-charging',    name: 'Charging',     nodeType: 'charging',    visible: true, color: NODE_TYPE_COLORS.charging },

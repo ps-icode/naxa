@@ -580,26 +580,31 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       </Layer>
 
       {/* ── Cell coordinate labels ────────────────────────────────────── */}
-      {showCellCoords && (
-        <Layer listening={false}>
-          <Group x={pan.x} y={pan.y} scaleX={zoom} scaleY={zoom}>
-            {map.cells.map(cell => {
-              const c = getCellCenter(cell.coord, map.config)
-              return (
-                <React.Fragment key={`coord-${cell.id}`}>
-                  <Circle x={c.x} y={c.y} radius={3} fill="#ffffff" opacity={0.85} listening={false} />
-                  <Text
-                    x={c.x - 14} y={c.y + 5}
-                    text={`(${cell.coord.row},${cell.coord.col})`}
-                    fontSize={7} fill="#94a3b8" fontFamily="monospace"
-                    width={28} align="center" listening={false}
-                  />
-                </React.Fragment>
-              )
-            })}
-          </Group>
-        </Layer>
-      )}
+      {showCellCoords && (() => {
+        const halfH = map.config.cellShape === 'hexagon' ? HEX_RADIUS
+          : map.config.cellShape === 'rectangle' ? RECT_H / 2
+          : SQUARE_SIZE / 2
+        return (
+          <Layer listening={false}>
+            <Group x={pan.x} y={pan.y} scaleX={zoom} scaleY={zoom}>
+              {map.cells.map(cell => {
+                const c = getCellCenter(cell.coord, map.config)
+                return (
+                  <React.Fragment key={`coord-${cell.id}`}>
+                    <Circle x={c.x} y={c.y} radius={3} fill="#ffffff" opacity={0.85} listening={false} />
+                    <Text
+                      x={c.x - 25} y={c.y - halfH + 2}
+                      text={`(${cell.coord.row},${cell.coord.col})`}
+                      fontSize={7} fill="#94a3b8" fontFamily="monospace"
+                      width={50} align="center" listening={false}
+                    />
+                  </React.Fragment>
+                )
+              })}
+            </Group>
+          </Layer>
+        )
+      })()}
 
       {/* ── Overlay: hover + preview + trace + path endpoints ─────────── */}
       <Layer ref={overlayLayerRef} listening={false}>

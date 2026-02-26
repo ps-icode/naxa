@@ -77,6 +77,7 @@ export default function LayerPanel() {
         <StatRow label="Typed cells" value={map.cells.filter(c => c.nodeType !== 'lane').length} />
         <StatRow label="Lanes" value={map.edges.length} />
         <StatRow label="Scale" value={`${map.config.cellSizeMeters}m/cell`} />
+        <StatRow label="Area" value={`${(map.config.rows * map.config.cols * map.config.cellSizeMeters ** 2).toFixed(1)} m²`} />
       </div>
 
       <div style={{ flex: 1 }} />

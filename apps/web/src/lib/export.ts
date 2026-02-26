@@ -157,10 +157,13 @@ export function exportCAD(map: GridMap): void {
       }))
     }
 
-    // Center dot + coordinate label
+    // Center dot + coordinate label (near top edge to avoid collision with node icon)
+    const halfH = shape === 'hexagon' ? HEX_RADIUS
+      : shape === 'rectangle' ? RECT_H / 2
+      : SQUARE_SIZE / 2
     layer.add(new Konva.Circle({ x: cx, y: cy, radius: 2.5, fill: '#ffffff' }))
     layer.add(new Konva.Text({
-      x: cx - 14, y: cy + 4, width: 28, align: 'center',
+      x: cx - 25, y: cy - halfH + 2, width: 50, align: 'center',
       text: `(${cell.coord.row},${cell.coord.col})`,
       fontSize: 7, fill: '#94a3b8', fontFamily: 'monospace',
     }))
