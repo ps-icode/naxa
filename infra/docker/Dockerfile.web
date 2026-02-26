@@ -1,0 +1,15 @@
+FROM oven/bun:1
+
+# Install from workspace root so @naxa/core workspace dep resolves
+WORKDIR /app
+COPY package.json ./
+COPY packages/ ./packages/
+COPY apps/web/ ./apps/web/
+RUN bun install
+
+# Run Vite from the web app directory
+WORKDIR /app/apps/web
+
+EXPOSE 3000
+
+CMD ["bun", "run", "dev", "--host"]

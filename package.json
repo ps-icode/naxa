@@ -1,0 +1,15 @@
+{
+  "name": "naxa",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun --cwd apps/web dev",
+    "build": "bun --cwd apps/web build",
+    "lint": "bun --cwd apps/web lint",
+    "typecheck": "bun --cwd apps/web typecheck"
+  }
+}

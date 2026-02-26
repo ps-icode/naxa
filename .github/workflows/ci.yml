@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-web:
+    name: Lint & typecheck (web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+      - name: Install dependencies
+        run: bun install
+        working-directory: apps/web
+      - name: Lint
+        run: bun run lint
+        working-directory: apps/web
+      - name: Typecheck
+        run: bun run typecheck
+        working-directory: apps/web
+
+  lint-api:
+    name: Lint & format check (api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: uv sync
+        working-directory: apps/api
+      - name: Ruff lint
+        run: uv run ruff check src/
+        working-directory: apps/api
+      - name: Ruff format check
+        run: uv run ruff format --check src/
+        working-directory: apps/api
+
+  test-api:
+    name: Tests (api)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: naxa
+          POSTGRES_PASSWORD: naxa
+          POSTGRES_DB: naxa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: uv sync
+        working-directory: apps/api
+      - name: Run tests
+        run: uv run pytest
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://naxa:naxa@localhost:5432/naxa
