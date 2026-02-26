@@ -16,10 +16,12 @@ function initCells(config: GridConfig): GridCell[] {
   return cells
 }
 
+// Caps history at 50 entries (slice(-49) + new = 50 max).
+// Clears future on every new action — standard linear undo model.
+// Callers always guard !s.map before calling snap(), so state.map is non-null here.
 function snap(state: GridStore): Pick<GridStore, 'past' | 'future'> {
-  if (!state.map) return {}
   return {
-    past: [...state.past.slice(-49), structuredClone(state.map)],
+    past: [...state.past.slice(-49), structuredClone(state.map!)],
     future: [],
   }
 }
@@ -96,7 +98,8 @@ export const useGridStore = create<GridStore>((set, _get) => ({
       }
     }),
 
-  // Batch update — no history snapshot (caller must call snapshotNow() once before stroke)
+  // No snapshot — caller must call snapshotNow() once at the start of a paint stroke,
+  // then stream batch updates through this action for the duration of the stroke.
   setCellTypeBatch: (updates) =>
     set((s) => {
       if (!s.map || updates.length === 0) return {}
@@ -126,6 +129,7 @@ export const useGridStore = create<GridStore>((set, _get) => ({
       }
     }),
 
+  // Intentionally skips snapshot — label edits are not undo-tracked.
   setCellLabel: (id, label) =>
     set((s) => {
       if (!s.map) return {}

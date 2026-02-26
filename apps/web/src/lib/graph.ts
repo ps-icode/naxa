@@ -14,6 +14,7 @@ function buildAdj(edges: Edge[]): Map<string, string[]> {
   return adj
 }
 
+// Returns null (not an empty array) when no path exists.
 export function bfsPath(fromId: string, toId: string, edges: Edge[]): string[] | null {
   if (fromId === toId) return [fromId]
   const adj = buildAdj(edges)
@@ -58,6 +59,7 @@ const TRACE_PALETTE = [
   '#f97316', '#ec4899', '#84cc16', '#6366f1',
 ]
 
+// Colors cycle through TRACE_PALETTE via modulo — routes.length % palette.length.
 export function buildTraceRoutes(map: GridMap): TraceRoute[] {
   const sources = map.cells.filter(c => c.nodeType === 'source')
   const destinations = map.cells.filter(c => c.nodeType === 'destination')

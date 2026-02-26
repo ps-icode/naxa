@@ -38,6 +38,10 @@ export function posToCell(px: number, py: number, config: GridConfig): CellCoord
   const { rows, cols, cellShape } = config
 
   if (cellShape === 'hexagon') {
+    // No closed-form inverse exists for offset hex grids: a pixel can lie in the
+    // overlap zone of up to 3 neighboring cells depending on row parity.
+    // We approximate the target row, then search a 3×3 candidate window and pick
+    // the cell whose center is closest to the hit point.
     const rowApprox = Math.round((py - GRID_PADDING - HEX_RADIUS) / (HEX_RADIUS * 1.5))
     let best: CellCoord | null = null
     let bestDist = HEX_RADIUS + 2
@@ -65,6 +69,7 @@ export function isAdjacent(a: CellCoord, b: CellCoord, shape: CellShape): boolea
   const dr = b.row - a.row
   const dc = b.col - a.col
   if (shape === 'hexagon') {
+    // Hex cells have exactly 6 neighbors (not 8); the valid set depends on row parity.
     return getHexNeighborOffsets(a.row).some(([nr, nc]) => nr === dr && nc === dc)
   }
   return Math.abs(dr) <= 1 && Math.abs(dc) <= 1 && !(dr === 0 && dc === 0)
@@ -89,7 +94,9 @@ export function getDirection(from: CellCoord, to: CellCoord, shape: CellShape): 
   return 'SW'
 }
 
-// [dr, dc] for each of the 6 hex directions [NE, E, SE, SW, W, NW]
+// Returns [dr, dc] offsets for all 6 hex neighbors in order [NE, E, SE, SW, W, NW].
+// Even and odd rows use two alternating offset templates because flat-top offset grids
+// shift every other row right by half a cell width.
 function getHexNeighborOffsets(row: number): [number, number][] {
   if (row % 2 === 0) {
     return [[-1, 0], [0, 1], [1, 0], [1, -1], [0, -1], [-1, -1]]

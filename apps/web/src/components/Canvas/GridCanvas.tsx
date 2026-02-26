@@ -274,7 +274,10 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const mouseRef = useRef({ x: 0, y: 0 })
   const previewLineRef = useRef<Konva.Line>(null)
   const overlayLayerRef = useRef<Konva.Layer>(null)
-  // Paint-stroke batching refs
+  // RAF coalescing: mousemove fires far faster than 60 fps, so we accumulate cell
+  // updates in paintQueueRef and flush them once per animation frame via rafPaintRef.
+  // paintStrokedRef ensures exactly one snapshotNow() call per drag stroke,
+  // keeping the undo history clean regardless of how many cells are painted.
   const paintQueueRef = useRef<Map<string, NodeType>>(new Map())
   const rafPaintRef = useRef<number | null>(null)
   const paintStrokedRef = useRef(false)
@@ -382,6 +385,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   }, [map?.edges, pathStart, pathEnd, setPathResult])
 
   // ── World-space coord helper ──────────────────────────────────────────────
+  // Converts screen pixel → world coordinate: worldPx = (screenPx - pan) / zoom
   const worldPos = useCallback((stage: Konva.Stage) => {
     const p = stage.getPointerPosition()
     if (!p) return null

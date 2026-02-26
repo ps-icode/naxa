@@ -68,6 +68,8 @@ export const useUIStore = create<UIStore>((set) => ({
   selectEdge: (selectedEdgeId) => set({ selectedEdgeId }),
   setSelectedCellId: (selectedCellId) => set({ selectedCellId }),
 
+  // First click: sets start. Second click on same cell: clears start (toggle).
+  // Second click on different cell: sets end and triggers path computation via effect.
   setPathPoint: (cellId) =>
     set((s) => {
       if (!s.pathStart) return { pathStart: cellId, pathEnd: null, pathResult: null }
@@ -82,6 +84,7 @@ export const useUIStore = create<UIStore>((set) => ({
   setValidationResult: (validationResult) => set({ validationResult }),
   setPathResult: (pathResult) => set({ pathResult }),
 
+  // Side effect: auto-dismisses the toast after 3.5 s via setTimeout.
   showToast: (message, type = 'success') => {
     set({ toast: { message, type } })
     setTimeout(() => set({ toast: null }), 3500)
