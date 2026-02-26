@@ -118,7 +118,7 @@ bun test:watch
 bun test:coverage
 ```
 
-157 tests across `lib/graph`, `lib/grid/geometry`, `lib/api`, `store/gridStore`, and `store/uiStore`.
+167 tests across `lib/graph`, `lib/grid/geometry`, `lib/api`, `store/gridStore`, and `store/uiStore`.
 
 ### Backend (pytest)
 
@@ -174,6 +174,44 @@ Interactive docs (Swagger UI) available at **http://localhost:8000/docs** when t
 | Offline-first localStorage fallback | Done |
 | Frontend tests — 157 tests, 100% coverage | Done |
 | Backend tests — 11 tests, all routes | Done |
+
+## v0.11 — UX Polish
+
+- Renamed "Lanes" layer to "Boundaries" (single source of truth in `DEFAULT_LAYERS`)
+- Coord labels moved to cell top-inner edge (no collision with node-type icon)
+- Coord label width increased to 50px to prevent `(100,100)` wrapping
+- Area stat added to LayerPanel: `rows × cols × cellSizeMeters²` in m²
+- Same coord-label fixes applied to CAD export
+
+## v0.12 — CAD Fix + Node Info
+
+- Fixed CAD dimension tick marks to anchor at actual cell grid edges (not canvas margin)
+- Layer panel rows now show native hover tooltips with one-line descriptions per node type
+- ⓘ badge inline in each layer name for discoverability
+
+## v0.13 — Full Validation
+
+- New `ValidationResult` type: `unreachableDestinations`, `unreachableSources`, `unreachableCharging`, `unreachableParking` (plus `unreachable` union)
+- Multi-source BFS replaces per-destination BFS loop: O(V+E) instead of O(sources × V+E)
+- Validate now checks charging and parking reachability and source return paths
+- Toast message breaks down unreachable counts by category
+- 8 new graph tests; 167 total, 100% coverage
+
+## v0.14 — Erase Drag + Load Map
+
+- Erase tool supports click-and-drag (RAF-batched, single snapshot per stroke)
+- New **Load** button in toolbar opens file picker for `.naxa.json` files with validation
+
+## v0.15 — Trace Routes UI
+
+- Route badges collapsed behind a **Routes (N) ▼/▲** toggle button
+- Auto-collapses when trace stops; reduces toolbar clutter for large route sets
+
+## v0.16 — Performance
+
+- Pan and zoom updates bypass React reconciliation: Konva Groups are mutated imperatively via refs; no re-renders during scroll/drag
+- Coord layer only mounts when `zoom ≥ 0.7` (labels unreadable at lower zoom) — eliminates ~8000 Konva nodes at low zoom
+- `CoordsGroup` memoized separately from the rest of the canvas
 
 ## Roadmap
 
