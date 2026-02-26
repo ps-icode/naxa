@@ -19,6 +19,7 @@ function freshStore(): void {
     traceRoutes: [],
     traceRunning: false,
     traceSpeed: 3,
+    showCellCoords: false,
   })
 }
 
@@ -223,5 +224,20 @@ describe('clearToast', () => {
     useUIStore.setState({ toast: { message: 'Test', type: 'success' } })
     useUIStore.getState().clearToast()
     expect(useUIStore.getState().toast).toBeNull()
+  })
+})
+
+// ── toggleCellCoords ──────────────────────────────────────────────────────────
+
+describe('toggleCellCoords', () => {
+  it('toggleCellCoords: false → true', () => {
+    useUIStore.getState().toggleCellCoords()
+    expect(useUIStore.getState().showCellCoords).toBe(true)
+  })
+
+  it('toggleCellCoords: true → false', () => {
+    useUIStore.setState({ showCellCoords: true })
+    useUIStore.getState().toggleCellCoords()
+    expect(useUIStore.getState().showCellCoords).toBe(false)
   })
 })

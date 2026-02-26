@@ -43,6 +43,8 @@ interface UIStore {
   setTraceRoutes: (routes: TraceRoute[]) => void
   setTraceRunning: (v: boolean) => void
   setTraceSpeed: (v: number) => void
+  showCellCoords: boolean
+  toggleCellCoords: () => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -61,6 +63,7 @@ export const useUIStore = create<UIStore>((set) => ({
   traceRoutes: [],
   traceRunning: false,
   traceSpeed: 3,
+  showCellCoords: false,
 
   setTool: (tool) =>
     set({ tool, selectedEdgeId: null, pathStart: null, pathEnd: null, pathResult: null, traceRunning: false }),
@@ -94,4 +97,5 @@ export const useUIStore = create<UIStore>((set) => ({
   setTraceRoutes: (traceRoutes) => set({ traceRoutes }),
   setTraceRunning: (traceRunning) => set({ traceRunning }),
   setTraceSpeed: (traceSpeed) => set({ traceSpeed }),
+  toggleCellCoords: () => set(s => ({ showCellCoords: !s.showCellCoords })),
 }))

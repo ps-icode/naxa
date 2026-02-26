@@ -1,7 +1,7 @@
 import { useGridStore } from '../../store/gridStore'
 import { useUIStore } from '../../store/uiStore'
 import { validateConnectivity, buildTraceRoutes } from '../../lib/graph'
-import { exportJSON, exportPNG } from '../../lib/export'
+import { exportJSON, exportPNG, exportCAD } from '../../lib/export'
 import { api } from '../../lib/api'
 import type { GridMap } from '@naxa/core'
 import type { Tool } from '../../store/uiStore'
@@ -20,6 +20,7 @@ export default function Toolbar() {
     setValidationResult, clearPath,
     traceRunning, traceSpeed, traceRoutes,
     setTraceRoutes, setTraceRunning, setTraceSpeed,
+    showCellCoords, toggleCellCoords,
   } = useUIStore()
 
   const canUndo = past.length > 0
@@ -154,6 +155,19 @@ export default function Toolbar() {
       <button onClick={handleValidate} disabled={!map} style={actionBtn('#1e293b')} title="Validate graph connectivity">Validate</button>
       <button onClick={() => map && exportJSON(map)} disabled={!map} style={actionBtn('#1e293b')} title="Export as JSON graph">JSON</button>
       <button onClick={() => map && exportPNG(map)} disabled={!map} style={actionBtn('#1e293b')} title="Export as PNG image">PNG</button>
+      <button onClick={() => map && exportCAD(map)} disabled={!map} style={actionBtn('#1e293b')} title="Export CAD-style PNG with measurements and cell coordinates">CAD</button>
+      <button
+        onClick={toggleCellCoords}
+        disabled={!map}
+        title="Toggle cell center coordinate labels on canvas"
+        style={{
+          ...actionBtn(showCellCoords ? '#164e63' : '#1e293b'),
+          border: showCellCoords ? '1px solid #22d3ee' : '1px solid #1e293b',
+          color: showCellCoords ? '#67e8f9' : '#e2e8f0',
+        }}
+      >
+        Coords
+      </button>
       <button onClick={handleSave} disabled={!map} style={actionBtn('#1e40af')}>Save</button>
     </div>
   )

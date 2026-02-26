@@ -3,7 +3,7 @@ import type { GridMap } from '@naxa/core'
 import { NODE_TYPE_COLORS } from '@naxa/core'
 import {
   getCellCenter, totalCanvasSize,
-  HEX_RADIUS, SQUARE_SIZE, RECT_W, RECT_H,
+  HEX_RADIUS, SQUARE_SIZE, RECT_W, RECT_H, GRID_PADDING,
 } from './grid/geometry'
 
 const NODE_ICONS: Record<string, string> = {
@@ -110,6 +110,120 @@ export function exportPNG(map: GridMap): void {
   const a = document.createElement('a')
   a.href = uri
   a.download = `${map.name.replace(/\s+/g, '_')}.png`
+  a.click()
+}
+
+const DIM_PAD = 70
+
+/** Exports a CAD-style PNG: cell outlines, center dots, (row,col) labels, and dimension annotations. */
+export function exportCAD(map: GridMap): void {
+  const { w: canvasW, h: canvasH } = totalCanvasSize(map.config)
+  const stageW = canvasW + DIM_PAD
+  const stageH = canvasH + DIM_PAD
+
+  const container = document.createElement('div')
+  container.style.cssText = 'position:fixed;left:-99999px;top:0;visibility:hidden;'
+  document.body.appendChild(container)
+
+  const stage = new Konva.Stage({ container, width: stageW, height: stageH })
+  const layer = new Konva.Layer()
+  stage.add(layer)
+
+  // Background
+  layer.add(new Konva.Rect({ x: 0, y: 0, width: stageW, height: stageH, fill: '#080818' }))
+
+  const shape = map.config.cellShape
+  const { rows, cols, cellSizeMeters } = map.config
+
+  // Cells — outlines only, no fill, no text, no edges
+  for (const cell of map.cells) {
+    const center = getCellCenter(cell.coord, map.config)
+    const cx = center.x + DIM_PAD
+    const cy = center.y + DIM_PAD
+    const stroke = NODE_TYPE_COLORS[cell.nodeType]
+
+    if (shape === 'hexagon') {
+      layer.add(new Konva.RegularPolygon({
+        x: cx, y: cy, sides: 6, radius: HEX_RADIUS - 1,
+        fill: 'transparent', stroke, strokeWidth: 1,
+      }))
+    } else {
+      const cw = shape === 'rectangle' ? RECT_W : SQUARE_SIZE
+      const ch = shape === 'rectangle' ? RECT_H : SQUARE_SIZE
+      layer.add(new Konva.Rect({
+        x: cx - cw / 2 + 1, y: cy - ch / 2 + 1,
+        width: cw - 2, height: ch - 2,
+        cornerRadius: 4, fill: 'transparent', stroke, strokeWidth: 1,
+      }))
+    }
+
+    // Center dot + coordinate label
+    layer.add(new Konva.Circle({ x: cx, y: cy, radius: 2.5, fill: '#ffffff' }))
+    layer.add(new Konva.Text({
+      x: cx - 14, y: cy + 4, width: 28, align: 'center',
+      text: `(${cell.coord.row},${cell.coord.col})`,
+      fontSize: 7, fill: '#94a3b8', fontFamily: 'monospace',
+    }))
+  }
+
+  // Dimension annotations
+  const gridLeft = DIM_PAD
+  const gridTop = DIM_PAD
+  const gridRight = DIM_PAD + canvasW - 2 * GRID_PADDING
+  const gridBottom = DIM_PAD + canvasH - 2 * GRID_PADDING
+  const annStroke = '#475569'
+  const annFill = '#94a3b8'
+
+  // A. Horizontal dimension (top)
+  layer.add(new Konva.Line({ points: [gridLeft, DIM_PAD - 18, gridLeft, DIM_PAD - 8], stroke: annStroke, strokeWidth: 1 }))
+  layer.add(new Konva.Line({ points: [gridRight, DIM_PAD - 18, gridRight, DIM_PAD - 8], stroke: annStroke, strokeWidth: 1 }))
+  layer.add(new Konva.Arrow({
+    points: [gridLeft, DIM_PAD - 13, gridRight, DIM_PAD - 13],
+    pointerAtBeginning: true, pointerAtEnding: true,
+    pointerLength: 5, pointerWidth: 4,
+    stroke: annStroke, strokeWidth: 1, fill: annStroke,
+  }))
+  layer.add(new Konva.Text({
+    x: gridLeft, y: DIM_PAD - 26,
+    width: gridRight - gridLeft, align: 'center',
+    text: `${(cols * cellSizeMeters).toFixed(2)} m`,
+    fontSize: 9, fill: annFill, fontFamily: 'monospace',
+  }))
+
+  // B. Vertical dimension (left)
+  layer.add(new Konva.Line({ points: [DIM_PAD - 18, gridTop, DIM_PAD - 8, gridTop], stroke: annStroke, strokeWidth: 1 }))
+  layer.add(new Konva.Line({ points: [DIM_PAD - 18, gridBottom, DIM_PAD - 8, gridBottom], stroke: annStroke, strokeWidth: 1 }))
+  layer.add(new Konva.Arrow({
+    points: [DIM_PAD - 13, gridTop, DIM_PAD - 13, gridBottom],
+    pointerAtBeginning: true, pointerAtEnding: true,
+    pointerLength: 5, pointerWidth: 4,
+    stroke: annStroke, strokeWidth: 1, fill: annStroke,
+  }))
+  const vLabel = new Konva.Text({
+    x: DIM_PAD - 13, y: gridTop + (gridBottom - gridTop) / 2,
+    text: `${(rows * cellSizeMeters).toFixed(2)} m`,
+    fontSize: 9, fill: annFill, fontFamily: 'monospace',
+    rotation: -90,
+  })
+  vLabel.offsetX(vLabel.width() / 2)
+  layer.add(vLabel)
+
+  // C. Title block
+  layer.add(new Konva.Text({
+    x: stageW - 220, y: stageH - 20,
+    text: `${map.name}  ·  ${rows}×${cols}  ·  ${shape}  ·  ${cellSizeMeters} m/cell`,
+    fontSize: 9, fill: '#334155',
+  }))
+
+  layer.batchDraw()
+
+  const uri = stage.toDataURL({ pixelRatio: 2 })
+  stage.destroy()
+  document.body.removeChild(container)
+
+  const a = document.createElement('a')
+  a.href = uri
+  a.download = `${map.name.replace(/\s+/g, '_')}_cad.png`
   a.click()
 }
 
