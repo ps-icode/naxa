@@ -248,7 +248,7 @@ interface Props {
 
 export default function GridCanvas({ width, height, stageRef }: Props) {
   const map = useGridStore(s => s.map)
-  const { addEdge, removeEdge, setCellType, setCellTypeBatch, snapshotNow, toggleEdgeBidirectional } = useGridStore.getState()
+  const { addEdge, removeEdge, setCellTypeBatch, snapshotNow, toggleEdgeBidirectional } = useGridStore.getState()
 
   const tool = useUIStore(s => s.tool)
   const activeNodeType = useUIStore(s => s.activeNodeType)
@@ -445,13 +445,14 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       }
       queuePaint(cellId!, activeNodeType)
     } else if (tool === 'erase') {
-      if (coord) setCellType(cellId!, 'lane')
+      if (!paintStrokedRef.current) { snapshotNow(); paintStrokedRef.current = true }
+      if (coord) queuePaint(cellId!, 'lane')
       const edgeId = hitTestEdge(wp.x, wp.y, map.edges, cellMap, getCenterById)
       if (edgeId) removeEdge(edgeId)
     } else if (tool === 'path' && coord) {
       setPathPoint(cellId!)
     }
-  }, [map, tool, activeNodeType, worldPos, snapshotNow, queuePaint, setCellType, removeEdge, cellMap, getCenterById,
+  }, [map, tool, activeNodeType, worldPos, snapshotNow, queuePaint, removeEdge, cellMap, getCenterById,
     selectEdge, setSelectedCellId, setPathPoint])
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -495,9 +496,9 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       }
     }
 
-    // Paint type — queued, flushed at most once per animation frame
-    if (tool === 'type' && e.evt.buttons === 1 && coord) {
-      queuePaint(`r${coord.row}c${coord.col}`, activeNodeType)
+    // Paint type or erase — queued, flushed at most once per animation frame
+    if ((tool === 'type' || tool === 'erase') && e.evt.buttons === 1 && coord) {
+      queuePaint(`r${coord.row}c${coord.col}`, tool === 'erase' ? 'lane' : activeNodeType)
     }
   }, [map, tool, activeNodeType, drawStart, worldPos, pan, setPan, cellCenters, addEdge, queuePaint])
 
