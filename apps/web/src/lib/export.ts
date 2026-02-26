@@ -173,7 +173,7 @@ export function exportCAD(map: GridMap, bg: BgMode = 'dark'): void {
     layer.add(new Konva.Circle({ x: cx, y: cy, radius: 2.5, fill: theme.dot }))
     layer.add(new Konva.Text({
       x: cx - 25, y: cy + 5, width: 50, align: 'center',
-      text: `(${cell.coord.row},${cell.coord.col})`,
+      text: `(${cell.coord.row + 1},${cell.coord.col + 1})`,
       fontSize: 7, fill: theme.coordText, fontFamily: 'monospace',
     }))
   }
@@ -186,12 +186,13 @@ export function exportCAD(map: GridMap, bg: BgMode = 'dark'): void {
   const { annStroke, annText } = theme
 
   // Compute true physical dimensions (hex geometry differs from square/rect)
+  const rowHeight = map.config.cellHeightMeters ?? cellSizeMeters
   const widthM  = shape === 'hexagon'
     ? (cols + 0.5) * Math.sqrt(3) * cellSizeMeters
     : cols * cellSizeMeters
   const heightM = shape === 'hexagon'
     ? (rows * 1.5 + 0.5) * cellSizeMeters
-    : rows * cellSizeMeters
+    : rows * rowHeight
 
   // A. Horizontal dimension (top)
   layer.add(new Konva.Line({ points: [gridLeft, DIM_PAD - 18, gridLeft, DIM_PAD - 8], stroke: annStroke, strokeWidth: 1 }))

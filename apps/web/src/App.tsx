@@ -6,6 +6,7 @@ import Toolbar from './components/Toolbar/Toolbar'
 import MapSetupModal from './components/MapSetup/MapSetupModal'
 import { useUIStore } from './store/uiStore'
 import { useGridStore } from './store/gridStore'
+import { PANE_THEMES } from './lib/themes'
 import { api } from './lib/api'
 
 const SIDEBAR = 220
@@ -13,8 +14,9 @@ const SIDEBAR = 220
 export default function App() {
   const stageRef = useRef<Konva.Stage>(null)
   const [size, setSize] = useState({ w: window.innerWidth - SIDEBAR, h: window.innerHeight - 44 })
-  const { showNewMapModal, toast } = useUIStore()
+  const { showNewMapModal, toast, mapBg } = useUIStore()
   const { map, setSavedList, undo, redo } = useGridStore()
+  const pt = PANE_THEMES[mapBg]
 
   // Window resize
   useEffect(() => {
@@ -51,23 +53,23 @@ export default function App() {
   }, [handleKey])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#080818', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: pt.bg, overflow: 'hidden' }}>
       {/* Toolbar */}
       <Toolbar />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Sidebar */}
         <aside style={{
-          width: SIDEBAR, flexShrink: 0, background: '#080c18',
-          borderRight: '1px solid #1e293b', padding: '16px 14px',
+          width: SIDEBAR, flexShrink: 0, background: pt.sidebar,
+          borderRight: `1px solid ${pt.border}`, padding: '16px 14px',
           overflowY: 'auto', display: 'flex', flexDirection: 'column',
         }}>
           {/* Logo */}
-          <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #1e293b' }}>
+          <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: `1px solid ${pt.border}` }}>
             <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.5px', color: '#60a5fa' }}>
               naxa
             </div>
-            <div style={{ fontSize: 10, color: '#334155', letterSpacing: 1, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 10, color: pt.label, letterSpacing: 1, textTransform: 'uppercase' }}>
               grid map editor
             </div>
           </div>
@@ -75,7 +77,7 @@ export default function App() {
           <LayerPanel />
 
           {/* Keyboard shortcuts hint */}
-          <div style={{ marginTop: 'auto', paddingTop: 12, fontSize: 10, color: '#1e293b', lineHeight: 1.8 }}>
+          <div style={{ marginTop: 'auto', paddingTop: 12, fontSize: 10, color: pt.subtext, lineHeight: 1.8 }}>
             D Draw · T Type · E Erase · P Path<br />
             Ctrl+Z Undo · Scroll Zoom · MMB Pan
           </div>

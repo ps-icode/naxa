@@ -64,7 +64,8 @@ export interface GridConfig {
   rows: number
   cols: number
   cellShape: CellShape
-  cellSizeMeters: number
+  cellSizeMeters: number    // square/hex: side/circumradius; rect: column width
+  cellHeightMeters?: number // rectangle only: row height (defaults to cellSizeMeters)
 }
 
 export interface GridMap {

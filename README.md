@@ -118,7 +118,7 @@ bun test:watch
 bun test:coverage
 ```
 
-167 tests across `lib/graph`, `lib/grid/geometry`, `lib/api`, `store/gridStore`, and `store/uiStore`.
+179 tests across `lib/graph`, `lib/grid/geometry`, `lib/api`, `lib/themes`, `store/gridStore`, and `store/uiStore`.
 
 ### Backend (pytest)
 
@@ -213,7 +213,25 @@ Interactive docs (Swagger UI) available at **http://localhost:8000/docs** when t
 - Coord layer only mounts when `zoom ≥ 0.7` (labels unreadable at lower zoom) — eliminates ~8000 Konva nodes at low zoom
 - `CoordsGroup` memoized separately from the rest of the canvas
 
+## v0.17 — UX Improvements
+
+- **Light/dark theme** — toolbar, sidebar, and canvas all switch between dark (default) and cream-off-white light modes via the ☾/☀ toggle in the toolbar; `PANE_THEMES` and `BG_THEMES` drive all token colors
+- **Map name inline edit** — click the map name in the sidebar to rename it; confirms on Enter or blur
+- **Reset actions** — three compact buttons near the New Map button: ⤢ Fit (fit map to viewport), ↺ Lanes (clear all edges, keep types), ↺ All (reset to blank grid); all undo-able
+- **Fit to screen on new map** — `requestFitToScreen()` is called after creating a new map so the grid is always visible
+- **1-indexed coordinates** — cell labels display as (1,1)…(N,M) instead of (0,0); internal IDs remain 0-indexed
+- **Rectangle cell dimensions** — `GridConfig.cellHeightMeters` optional field; New Map modal shows a second "H m/cell" input for rectangle grids so width and height can differ; CAD export uses the correct height measurement
+- **Load map moved to sidebar** — ↑ Load button is now next to + New Map (same scope level) rather than in the toolbar
+- Grid size input summary: square = 1 input (side length), rectangle = 2 inputs (width + height), hexagon = 1 input (circumradius)
+- 179 tests, 100% coverage
+
 ## Roadmap
+
+### v0.18 — Custom Export Formats
+- Export map as structured JSON with configurable field names (for custom fleet systems)
+- YAML export with the same structure
+- Selectable coordinate system: 0-indexed or 1-indexed in output
+- Filter exported nodes by layer visibility
 
 ### v0.2 — Auth & Sharing
 - JWT-based user authentication (login / register)

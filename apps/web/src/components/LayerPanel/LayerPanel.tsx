@@ -3,6 +3,7 @@ import { useGridStore } from '../../store/gridStore'
 import { useUIStore } from '../../store/uiStore'
 import { api } from '../../lib/api'
 import { NODE_TYPE_COLORS, SUBTYPES } from '@naxa/core'
+import { PANE_THEMES } from '../../lib/themes'
 import type { NodeType } from '@naxa/core'
 
 const ICONS: Record<string, string> = {
@@ -21,8 +22,26 @@ const LAYER_INFO: Record<string, string> = {
 }
 
 export default function LayerPanel() {
-  const { map, toggleLayerVisibility, savedList, loadMap, setCellSubtype, setCellLabel } = useGridStore()
-  const { tool, activeNodeType, setActiveNodeType, showToast, setShowNewMapModal, selectedCellId } = useUIStore()
+  const {
+    map, toggleLayerVisibility, savedList, loadMap, updateMapName,
+    setCellSubtype, setCellLabel, clearEdges, resetCells,
+  } = useGridStore()
+  const {
+    tool, activeNodeType, setActiveNodeType, showToast, setShowNewMapModal,
+    selectedCellId, mapBg, requestFitToScreen,
+  } = useUIStore()
+
+  const pt = PANE_THEMES[mapBg]
+
+  // Inline map name editing
+  const [nameEditing, setNameEditing] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+
+  const commitName = () => {
+    const trimmed = nameDraft.trim()
+    if (trimmed && map && trimmed !== map.name) updateMapName(trimmed)
+    setNameEditing(false)
+  }
 
   const handleLoadJSON = () => {
     const input = document.createElement('input')
@@ -49,22 +68,48 @@ export default function LayerPanel() {
     input.click()
   }
 
-  if (!map) return <EmptyState onNew={() => setShowNewMapModal(true)} />
+  if (!map) return <EmptyState onNew={() => setShowNewMapModal(true)} pt={pt} />
 
   const selectedCell = selectedCellId ? map.cells.find(c => c.id === selectedCellId) : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
-      {/* Map title */}
-      <div style={{ paddingBottom: 14, marginBottom: 14, borderBottom: '1px solid #1e293b' }}>
-        <div style={{ fontSize: 10, color: '#334155', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Map</div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{map.name}</div>
-        <div style={{ fontSize: 11, color: '#334155', marginTop: 2 }}>{map.config.rows}×{map.config.cols} · {map.config.cellShape}</div>
+      {/* Map title (click to edit) */}
+      <div style={{ paddingBottom: 14, marginBottom: 14, borderBottom: `1px solid ${pt.border}` }}>
+        <div style={{ fontSize: 10, color: pt.label, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Map</div>
+        {nameEditing ? (
+          <input
+            autoFocus
+            value={nameDraft}
+            onChange={e => setNameDraft(e.target.value)}
+            onBlur={commitName}
+            onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setNameEditing(false) }}
+            style={{
+              width: '100%', padding: '3px 6px', borderRadius: 4, fontSize: 13,
+              fontWeight: 600, border: `1px solid ${NODE_TYPE_COLORS.source}`,
+              background: pt.inputBg, color: pt.textPrimary, outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+        ) : (
+          <div
+            title="Click to rename"
+            onClick={() => { setNameDraft(map.name); setNameEditing(true) }}
+            style={{
+              fontSize: 13, fontWeight: 600, color: pt.textPrimary,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              cursor: 'text', padding: '2px 0',
+            }}
+          >
+            {map.name} <span style={{ fontSize: 9, color: pt.label, marginLeft: 2 }}>✎</span>
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: pt.label, marginTop: 2 }}>{map.config.rows}×{map.config.cols} · {map.config.cellShape}</div>
       </div>
 
       {/* Layers */}
       <div style={{ marginBottom: 14, flexShrink: 0 }}>
-        <SectionLabel>Layers</SectionLabel>
+        <SectionLabel pt={pt}>Layers</SectionLabel>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {map.layers.map(layer => {
             const isActive = tool === 'type' && activeNodeType === layer.nodeType
@@ -76,22 +121,22 @@ export default function LayerPanel() {
                   display: 'flex', alignItems: 'center', gap: 7,
                   padding: '6px 8px', borderRadius: 5, cursor: 'pointer',
                   background: isActive ? 'rgba(96,165,250,0.1)' : 'transparent',
-                  border: isActive ? '1px solid rgba(96,165,250,0.25)' : '1px solid transparent',
+                  border: isActive ? '1px solid rgba(96,165,250,0.25)' : `1px solid transparent`,
                 }}
                 onClick={() => { if (tool === 'type') setActiveNodeType(layer.nodeType as NodeType) }}
               >
                 <div
                   style={{
                     width: 12, height: 12, borderRadius: 2, flexShrink: 0, cursor: 'pointer',
-                    border: `2px solid ${layer.visible ? layer.color : '#334155'}`,
+                    border: `2px solid ${layer.visible ? layer.color : pt.label}`,
                     background: layer.visible ? layer.color : 'transparent',
                   }}
                   onClick={e => { e.stopPropagation(); toggleLayerVisibility(layer.id) }}
                 />
-                <span style={{ fontSize: 12, color: '#475569', width: 12, textAlign: 'center', flexShrink: 0 }}>{ICONS[layer.nodeType]}</span>
-                <span style={{ fontSize: 12, flex: 1, color: layer.visible ? '#cbd5e1' : '#334155' }}>
+                <span style={{ fontSize: 12, color: pt.muted, width: 12, textAlign: 'center', flexShrink: 0 }}>{ICONS[layer.nodeType]}</span>
+                <span style={{ fontSize: 12, flex: 1, color: layer.visible ? pt.text : pt.label }}>
                   {layer.name}
-                  <span style={{ fontSize: 9, color: '#334155', marginLeft: 4 }} title={LAYER_INFO[layer.nodeType]}>ⓘ</span>
+                  <span style={{ fontSize: 9, color: pt.label, marginLeft: 4 }} title={LAYER_INFO[layer.nodeType]}>ⓘ</span>
                 </span>
                 {isActive && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#60a5fa' }} />}
               </div>
@@ -105,6 +150,7 @@ export default function LayerPanel() {
         <CellInfoPanel
           key={selectedCellId}
           cell={selectedCell}
+          pt={pt}
           onSubtype={sub => setCellSubtype(selectedCell.id, sub)}
           onLabel={lbl => setCellLabel(selectedCell.id, lbl || undefined)}
         />
@@ -112,25 +158,25 @@ export default function LayerPanel() {
 
       {/* Stats */}
       <div style={{ marginBottom: 14, flexShrink: 0 }}>
-        <SectionLabel>Stats</SectionLabel>
-        <StatRow label="Typed cells" value={map.cells.filter(c => c.nodeType !== 'lane').length} />
-        <StatRow label="Lanes" value={map.edges.length} />
-        <StatRow label="Scale" value={`${map.config.cellSizeMeters}m/cell`} />
-        <StatRow label="Area" value={`${(map.config.rows * map.config.cols * map.config.cellSizeMeters ** 2).toFixed(1)} m²`} />
+        <SectionLabel pt={pt}>Stats</SectionLabel>
+        <StatRow label="Typed cells" value={map.cells.filter(c => c.nodeType !== 'lane').length} pt={pt} />
+        <StatRow label="Lanes" value={map.edges.length} pt={pt} />
+        <StatRow label="Scale" value={`${map.config.cellSizeMeters}m/cell`} pt={pt} />
+        <StatRow label="Area" value={`${(map.config.rows * map.config.cols * map.config.cellSizeMeters ** 2).toFixed(1)} m²`} pt={pt} />
       </div>
 
       <div style={{ flex: 1 }} />
 
       {/* Saved maps */}
       {savedList.length > 0 && (
-        <div style={{ paddingTop: 10, borderTop: '1px solid #1e293b', overflow: 'auto', maxHeight: 150, marginBottom: 10 }}>
-          <SectionLabel>Saved</SectionLabel>
+        <div style={{ paddingTop: 10, borderTop: `1px solid ${pt.border}`, overflow: 'auto', maxHeight: 150, marginBottom: 10 }}>
+          <SectionLabel pt={pt}>Saved</SectionLabel>
           {savedList.map(m => (
             <div
               key={m.id}
               style={{
                 padding: '5px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 11,
-                color: m.id === map.id ? '#60a5fa' : '#475569',
+                color: m.id === map.id ? '#60a5fa' : pt.muted,
                 background: m.id === map.id ? 'rgba(96,165,250,0.08)' : 'transparent',
               }}
               onClick={async () => {
@@ -144,9 +190,35 @@ export default function LayerPanel() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 6 }}>
+      {/* New Map + Load */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
         <button onClick={() => setShowNewMapModal(true)} style={{ ...newMapBtn, flex: 1 }}>+ New Map</button>
-        <button onClick={handleLoadJSON} style={loadBtn} title="Load map from a .naxa.json file">↑ Load</button>
+        <button onClick={handleLoadJSON} style={loadBtn(pt)} title="Load map from a .naxa.json file">↑ Load</button>
+      </div>
+
+      {/* Reset + Fit buttons */}
+      <div style={{ display: 'flex', gap: 5 }}>
+        <button
+          onClick={requestFitToScreen}
+          title="Fit map to viewport"
+          style={{ ...resetBtn(pt), flex: 1, color: '#60a5fa', borderColor: 'rgba(96,165,250,0.3)' }}
+        >
+          ⤢ Fit
+        </button>
+        <button
+          onClick={() => { clearEdges(); showToast('Lanes cleared ✓') }}
+          title="Remove all lanes (keep cell types)"
+          style={resetBtn(pt)}
+        >
+          ↺ Lanes
+        </button>
+        <button
+          onClick={() => { resetCells(); showToast('Map reset ✓') }}
+          title="Reset entire map to blank grid"
+          style={resetBtn(pt)}
+        >
+          ↺ All
+        </button>
       </div>
     </div>
   )
@@ -155,11 +227,12 @@ export default function LayerPanel() {
 // ── Cell info / subtype panel ─────────────────────────────────────────────────
 interface CellInfoPanelProps {
   cell: { id: string; nodeType: NodeType; subtype?: string; label?: string; coord: { row: number; col: number } }
+  pt: typeof PANE_THEMES.dark
   onSubtype: (s: string | undefined) => void
   onLabel: (l: string) => void
 }
 
-function CellInfoPanel({ cell, onSubtype, onLabel }: CellInfoPanelProps) {
+function CellInfoPanel({ cell, pt, onSubtype, onLabel }: CellInfoPanelProps) {
   const [labelDraft, setLabelDraft] = useState(cell.label ?? '')
   const options = SUBTYPES[cell.nodeType] ?? []
   const color = NODE_TYPE_COLORS[cell.nodeType]
@@ -170,13 +243,13 @@ function CellInfoPanel({ cell, onSubtype, onLabel }: CellInfoPanelProps) {
       border: `1px solid ${color}44`, background: `${color}0d`,
     }}>
       <div style={{ fontSize: 10, color, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
-        {ICONS[cell.nodeType]} {cell.nodeType} · r{cell.coord.row}c{cell.coord.col}
+        {ICONS[cell.nodeType]} {cell.nodeType} · r{cell.coord.row + 1}c{cell.coord.col + 1}
       </div>
 
       {/* Subtype chips */}
       {options.length > 0 && (
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 10, color: '#475569', marginBottom: 5 }}>Subtype</div>
+          <div style={{ fontSize: 10, color: pt.muted, marginBottom: 5 }}>Subtype</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {options.map(opt => (
               <button
@@ -184,9 +257,9 @@ function CellInfoPanel({ cell, onSubtype, onLabel }: CellInfoPanelProps) {
                 onClick={() => onSubtype(cell.subtype === opt ? undefined : opt)}
                 style={{
                   padding: '2px 7px', borderRadius: 10, fontSize: 10, cursor: 'pointer',
-                  border: `1px solid ${cell.subtype === opt ? color : '#1e293b'}`,
+                  border: `1px solid ${cell.subtype === opt ? color : pt.border}`,
                   background: cell.subtype === opt ? color + '33' : 'transparent',
-                  color: cell.subtype === opt ? color : '#475569',
+                  color: cell.subtype === opt ? color : pt.muted,
                 }}
               >
                 {opt.replace(/_/g, ' ')}
@@ -198,7 +271,7 @@ function CellInfoPanel({ cell, onSubtype, onLabel }: CellInfoPanelProps) {
 
       {/* Custom label */}
       <div>
-        <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>Label</div>
+        <div style={{ fontSize: 10, color: pt.muted, marginBottom: 4 }}>Label</div>
         <input
           value={labelDraft}
           onChange={e => setLabelDraft(e.target.value)}
@@ -207,7 +280,7 @@ function CellInfoPanel({ cell, onSubtype, onLabel }: CellInfoPanelProps) {
           placeholder={cell.subtype ?? 'e.g. feeder_1, bin_2…'}
           style={{
             width: '100%', padding: '5px 8px', borderRadius: 4, fontSize: 11,
-            border: '1px solid #1e293b', background: '#060614', color: '#e2e8f0',
+            border: `1px solid ${pt.border}`, background: pt.inputBg, color: pt.textPrimary,
             outline: 'none', boxSizing: 'border-box',
           }}
         />
@@ -216,11 +289,11 @@ function CellInfoPanel({ cell, onSubtype, onLabel }: CellInfoPanelProps) {
   )
 }
 
-function EmptyState({ onNew }: { onNew: () => void }) {
+function EmptyState({ onNew, pt }: { onNew: () => void; pt: typeof PANE_THEMES.dark }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14, padding: 16, textAlign: 'center' }}>
       <div style={{ fontSize: 28 }}>🗺️</div>
-      <div style={{ fontSize: 12, color: '#334155', lineHeight: 1.7 }}>
+      <div style={{ fontSize: 12, color: pt.label, lineHeight: 1.7 }}>
         Create a grid map to start designing navigation lanes
       </div>
       <button onClick={onNew} style={newMapBtn}>+ New Map</button>
@@ -228,15 +301,15 @@ function EmptyState({ onNew }: { onNew: () => void }) {
   )
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 10, color: '#334155', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 7 }}>{children}</div>
+function SectionLabel({ children, pt }: { children: React.ReactNode; pt: typeof PANE_THEMES.dark }) {
+  return <div style={{ fontSize: 10, color: pt.label, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 7 }}>{children}</div>
 }
 
-function StatRow({ label, value }: { label: string; value: string | number }) {
+function StatRow({ label, value, pt }: { label: string; value: string | number; pt: typeof PANE_THEMES.dark }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-      <span style={{ fontSize: 11, color: '#334155' }}>{label}</span>
-      <span style={{ fontSize: 11, color: '#94a3b8' }}>{value}</span>
+      <span style={{ fontSize: 11, color: pt.label }}>{label}</span>
+      <span style={{ fontSize: 11, color: pt.text }}>{value}</span>
     </div>
   )
 }
@@ -247,8 +320,14 @@ const newMapBtn: React.CSSProperties = {
   color: '#93c5fd', fontSize: 12, cursor: 'pointer', fontWeight: 500,
 }
 
-const loadBtn: React.CSSProperties = {
+const loadBtn = (pt: typeof PANE_THEMES.dark): React.CSSProperties => ({
   padding: '7px 10px', borderRadius: 5,
-  border: '1px solid #1e293b', background: '#0a0f1e',
-  color: '#64748b', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
-}
+  border: `1px solid ${pt.border}`, background: pt.inputBg,
+  color: pt.muted, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+})
+
+const resetBtn = (pt: typeof PANE_THEMES.dark): React.CSSProperties => ({
+  padding: '5px 0', borderRadius: 5, fontSize: 11, cursor: 'pointer',
+  border: `1px solid ${pt.border}`, background: pt.inputBg,
+  color: pt.muted, whiteSpace: 'nowrap',
+})

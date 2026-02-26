@@ -48,6 +48,8 @@ interface UIStore {
   toggleCellCoords: () => void
   mapBg: 'dark' | 'light'
   toggleMapBg: () => void
+  fitRequested: number
+  requestFitToScreen: () => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -103,4 +105,6 @@ export const useUIStore = create<UIStore>((set) => ({
   setTraceSpeed: (traceSpeed) => set({ traceSpeed }),
   toggleCellCoords: () => set(s => ({ showCellCoords: !s.showCellCoords })),
   toggleMapBg: () => set(s => ({ mapBg: s.mapBg === 'dark' ? 'light' : 'dark' })),
+  fitRequested: 0,
+  requestFitToScreen: () => set(s => ({ fitRequested: s.fitRequested + 1 })),
 }))

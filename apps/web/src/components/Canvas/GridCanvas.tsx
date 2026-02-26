@@ -8,7 +8,7 @@ import type Konva from 'konva'
 import { useGridStore } from '../../store/gridStore'
 import { useUIStore } from '../../store/uiStore'
 import {
-  getCellCenter, posToCell, isAdjacent, getDirection,
+  getCellCenter, posToCell, isAdjacent, getDirection, totalCanvasSize,
   HEX_RADIUS, SQUARE_SIZE, RECT_W, RECT_H,
 } from '../../lib/grid/geometry'
 import { hitTestEdge, bfsPath } from '../../lib/graph'
@@ -271,7 +271,7 @@ const CoordsGroup = memo(function CoordsGroup({ cells, config, dotColor, labelCo
             <Circle x={c.x} y={c.y} radius={3} fill={dotColor} opacity={0.85} listening={false} />
             <Text
               x={c.x - 25} y={c.y + 5}
-              text={`(${cell.coord.row},${cell.coord.col})`}
+              text={`(${cell.coord.row + 1},${cell.coord.col + 1})`}
               fontSize={7} fill={labelColor} fontFamily="monospace"
               width={50} align="center" listening={false}
             />
@@ -302,6 +302,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const activeNodeType = useUIStore(s => s.activeNodeType)
   const mapBg = useUIStore(s => s.mapBg)
   const bgTheme = BG_THEMES[mapBg]
+  const fitRequested = useUIStore(s => s.fitRequested)
   // pan/zoom are refs — we apply transforms imperatively to avoid re-renders on every scroll/drag
   const panRef = useRef(useUIStore.getState().pan)
   const zoomRef = useRef(useUIStore.getState().zoom)
@@ -452,6 +453,34 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       grp.current.getLayer()?.batchDraw()
     }
   }, [])
+
+  // ── Fit-to-screen ─────────────────────────────────────────────────────────
+  // widthRef/heightRef allow the effect to read current dimensions without
+  // being triggered by resize events (only explicit fit requests should re-fit).
+  const widthRef = useRef(width)
+  const heightRef = useRef(height)
+  widthRef.current = width
+  heightRef.current = height
+
+  useEffect(() => {
+    if (fitRequested === 0) return
+    const currentMap = useGridStore.getState().map
+    if (!currentMap) return
+    const { w: gw, h: gh } = totalCanvasSize(currentMap.config)
+    const newZoom = Math.min(widthRef.current / gw, heightRef.current / gh) * 0.88
+    const newPan = {
+      x: (widthRef.current - gw * newZoom) / 2,
+      y: (heightRef.current - gh * newZoom) / 2,
+    }
+    panRef.current = newPan
+    zoomRef.current = newZoom
+    applyTransform(newPan, newZoom)
+    setZoom(newZoom)
+    setPan(newPan)
+    setZoomAboveThreshold(newZoom >= 0.7)
+  // Only re-run when fitRequested counter changes — width/height/map read via refs/getState
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitRequested, applyTransform])
 
   // ── World-space coord helper ──────────────────────────────────────────────
   // Converts screen pixel → world coordinate: worldPx = (screenPx - pan) / zoom

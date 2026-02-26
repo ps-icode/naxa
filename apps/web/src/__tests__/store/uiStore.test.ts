@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useUIStore } from '../../store/uiStore'
+import { PANE_THEMES } from '../../lib/themes'
 import type { TraceRoute } from '../../store/uiStore'
 import type { ValidationResult } from '../../lib/graph'
 
@@ -22,6 +23,7 @@ function freshStore(): void {
     traceSpeed: 3,
     showCellCoords: false,
     mapBg: 'dark',
+    fitRequested: 0,
   })
 }
 
@@ -262,5 +264,32 @@ describe('toggleMapBg', () => {
     useUIStore.setState({ mapBg: 'light' })
     useUIStore.getState().toggleMapBg()
     expect(useUIStore.getState().mapBg).toBe('dark')
+  })
+})
+
+// ── requestFitToScreen ────────────────────────────────────────────────────────
+
+describe('requestFitToScreen', () => {
+  it('starts at 0', () => {
+    expect(useUIStore.getState().fitRequested).toBe(0)
+  })
+
+  it('increments on each call', () => {
+    useUIStore.getState().requestFitToScreen()
+    expect(useUIStore.getState().fitRequested).toBe(1)
+    useUIStore.getState().requestFitToScreen()
+    expect(useUIStore.getState().fitRequested).toBe(2)
+  })
+})
+
+// ── PANE_THEMES ───────────────────────────────────────────────────────────────
+
+describe('PANE_THEMES', () => {
+  it('has dark and light modes with required keys', () => {
+    const keys = ['bg', 'sidebar', 'border', 'inputBg', 'label', 'muted', 'text', 'textPrimary', 'subtext'] as const
+    for (const k of keys) {
+      expect(PANE_THEMES.dark).toHaveProperty(k)
+      expect(PANE_THEMES.light).toHaveProperty(k)
+    }
   })
 })

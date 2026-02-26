@@ -47,6 +47,8 @@ interface GridStore {
   addEdge: (fromId: string, toId: string, direction: Direction) => void
   removeEdge: (edgeId: string) => void
   toggleEdgeBidirectional: (edgeId: string) => void
+  clearEdges: () => void
+  resetCells: () => void
   toggleLayerVisibility: (layerId: string) => void
 
   undo: () => void
@@ -171,6 +173,26 @@ export const useGridStore = create<GridStore>((set, _get) => ({
           ...s.map,
           updatedAt: new Date().toISOString(),
           edges: s.map.edges.map(e => e.id === edgeId ? { ...e, bidirectional: !e.bidirectional } : e),
+        },
+      }
+    }),
+
+  clearEdges: () =>
+    set((s) => {
+      if (!s.map) return {}
+      return { ...snap(s), map: { ...s.map, updatedAt: new Date().toISOString(), edges: [] } }
+    }),
+
+  resetCells: () =>
+    set((s) => {
+      if (!s.map) return {}
+      return {
+        ...snap(s),
+        map: {
+          ...s.map,
+          updatedAt: new Date().toISOString(),
+          cells: s.map.cells.map(c => ({ ...c, nodeType: 'lane' as NodeType, subtype: undefined, label: undefined })),
+          edges: [],
         },
       }
     }),

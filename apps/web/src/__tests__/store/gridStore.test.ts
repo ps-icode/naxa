@@ -390,6 +390,64 @@ describe('null map guards', () => {
   })
 })
 
+// ── clearEdges ────────────────────────────────────────────────────────────────
+
+describe('clearEdges', () => {
+  beforeEach(() => {
+    useGridStore.getState().newMap('Test', BASE_CONFIG)
+    useGridStore.getState().addEdge('r0c0', 'r0c1', 'E')
+    useGridStore.setState({ past: [] })
+  })
+
+  it('removes all edges', () => {
+    useGridStore.getState().clearEdges()
+    expect(useGridStore.getState().map!.edges).toHaveLength(0)
+  })
+
+  it('pushes snapshot to past', () => {
+    useGridStore.getState().clearEdges()
+    expect(useGridStore.getState().past).toHaveLength(1)
+  })
+
+  it('is a no-op when map is null', () => {
+    useGridStore.setState({ map: null })
+    useGridStore.getState().clearEdges()
+    expect(useGridStore.getState().map).toBeNull()
+  })
+})
+
+// ── resetCells ────────────────────────────────────────────────────────────────
+
+describe('resetCells', () => {
+  beforeEach(() => {
+    useGridStore.getState().newMap('Test', BASE_CONFIG)
+    useGridStore.getState().setCellType('r0c0', 'source')
+    useGridStore.getState().addEdge('r0c0', 'r0c1', 'E')
+    useGridStore.setState({ past: [] })
+  })
+
+  it('resets all cells to lane type', () => {
+    useGridStore.getState().resetCells()
+    expect(useGridStore.getState().map!.cells.every(c => c.nodeType === 'lane')).toBe(true)
+  })
+
+  it('clears all edges', () => {
+    useGridStore.getState().resetCells()
+    expect(useGridStore.getState().map!.edges).toHaveLength(0)
+  })
+
+  it('pushes snapshot to past', () => {
+    useGridStore.getState().resetCells()
+    expect(useGridStore.getState().past).toHaveLength(1)
+  })
+
+  it('is a no-op when map is null', () => {
+    useGridStore.setState({ map: null })
+    useGridStore.getState().resetCells()
+    expect(useGridStore.getState().map).toBeNull()
+  })
+})
+
 // ── history cap ───────────────────────────────────────────────────────────────
 
 describe('history cap', () => {

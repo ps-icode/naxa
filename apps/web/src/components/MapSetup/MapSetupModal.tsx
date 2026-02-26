@@ -3,21 +3,42 @@ import { useGridStore } from '../../store/gridStore'
 import { useUIStore } from '../../store/uiStore'
 import type { CellShape } from '@naxa/core'
 
+// Grid size input guide:
+//   square:    1 input (side length in meters — all sides equal)
+//   rectangle: 2 inputs (column width + row height in meters — independent)
+//   hexagon:   1 input (circumradius in meters — center to vertex)
+
 export default function MapSetupModal() {
   const { newMap } = useGridStore()
-  const { setShowNewMapModal, setTool } = useUIStore()
+  const { setShowNewMapModal, setTool, requestFitToScreen } = useUIStore()
 
   const [name, setName] = useState('New Map')
   const [shape, setShape] = useState<CellShape>('square')
   const [rows, setRows] = useState(15)
   const [cols, setCols] = useState(20)
-  const [scale, setScale] = useState(0.5)
+  const [scale, setScale] = useState(0.5)    // column width (or side / hex circumradius)
+  const [scaleH, setScaleH] = useState(0.5)  // row height (rectangle only)
 
   const create = () => {
-    newMap(name.trim() || 'Map', { rows, cols, cellShape: shape, cellSizeMeters: scale })
+    const config = {
+      rows, cols, cellShape: shape, cellSizeMeters: scale,
+      ...(shape === 'rectangle' ? { cellHeightMeters: scaleH } : {}),
+    }
+    newMap(name.trim() || 'Map', config)
     setTool('draw')
     setShowNewMapModal(false)
+    requestFitToScreen()
   }
+
+  // Real-world size preview
+  const realW = shape === 'hexagon'
+    ? (cols + 0.5) * Math.sqrt(3) * scale
+    : cols * scale
+  const realH = shape === 'hexagon'
+    ? (rows * 1.5 + 0.5) * scale
+    : shape === 'rectangle'
+      ? rows * scaleH
+      : rows * scale
 
   return (
     <div style={{
@@ -25,7 +46,7 @@ export default function MapSetupModal() {
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
     }}>
       <div style={{
-        background: '#0f172a', borderRadius: 12, padding: 32, width: 420,
+        background: '#0f172a', borderRadius: 12, padding: 32, width: 440,
         border: '1px solid #1e293b', boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
       }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: '#e2e8f0' }}>New Map</h2>
@@ -61,9 +82,14 @@ export default function MapSetupModal() {
               </button>
             ))}
           </div>
+          <div style={{ fontSize: 11, color: '#334155', marginTop: 6 }}>
+            {shape === 'square'    && '1 size input — all sides equal'}
+            {shape === 'rectangle' && '2 size inputs — column width + row height (independent)'}
+            {shape === 'hexagon'   && '1 size input — circumradius (center → vertex)'}
+          </div>
         </Field>
 
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <Field label="Rows">
             <input
               type="number" min={3} max={50} value={rows}
@@ -78,18 +104,27 @@ export default function MapSetupModal() {
               style={{ ...inputStyle, width: '100%' }}
             />
           </Field>
-          <Field label="m / cell">
+          <Field label={shape === 'rectangle' ? 'W m/cell' : 'm/cell'}>
             <input
               type="number" min={0.1} max={10} step={0.1} value={scale}
               onChange={e => setScale(+e.target.value)}
               style={{ ...inputStyle, width: '100%' }}
             />
           </Field>
+          {shape === 'rectangle' && (
+            <Field label="H m/cell">
+              <input
+                type="number" min={0.1} max={10} step={0.1} value={scaleH}
+                onChange={e => setScaleH(+e.target.value)}
+                style={{ ...inputStyle, width: '100%' }}
+              />
+            </Field>
+          )}
         </div>
 
         <div style={{ background: '#0a0f1e', borderRadius: 6, padding: '10px 12px', marginBottom: 20, fontSize: 12, color: '#475569' }}>
           Grid: <strong style={{ color: '#94a3b8' }}>{rows * cols}</strong> cells ·{' '}
-          Real size: <strong style={{ color: '#94a3b8' }}>{(rows * scale).toFixed(1)}m × {(cols * scale).toFixed(1)}m</strong>
+          Real size: <strong style={{ color: '#94a3b8' }}>{realH.toFixed(1)} m × {realW.toFixed(1)} m</strong>
         </div>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
