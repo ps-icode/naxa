@@ -239,6 +239,38 @@ const EdgesGroup = memo(function EdgesGroup({
   prev.tracedEdges === next.tracedEdges,
 )
 
+// ── Memoized Coords Group ─────────────────────────────────────────────────────
+interface CoordsGroupProps {
+  cells: GridMap['cells']
+  config: GridMap['config']
+  halfH: number
+}
+
+const CoordsGroup = memo(function CoordsGroup({ cells, config, halfH }: CoordsGroupProps) {
+  return (
+    <>
+      {cells.map(cell => {
+        const c = getCellCenter(cell.coord, config)
+        return (
+          <React.Fragment key={`coord-${cell.id}`}>
+            <Circle x={c.x} y={c.y} radius={3} fill="#ffffff" opacity={0.85} listening={false} />
+            <Text
+              x={c.x - 25} y={c.y - halfH + 2}
+              text={`(${cell.coord.row},${cell.coord.col})`}
+              fontSize={7} fill="#94a3b8" fontFamily="monospace"
+              width={50} align="center" listening={false}
+            />
+          </React.Fragment>
+        )
+      })}
+    </>
+  )
+}, (prev, next) =>
+  prev.cells === next.cells &&
+  prev.config === next.config &&
+  prev.halfH === next.halfH,
+)
+
 // ── Main Component ────────────────────────────────────────────────────────────
 interface Props {
   width: number
@@ -252,9 +284,12 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
 
   const tool = useUIStore(s => s.tool)
   const activeNodeType = useUIStore(s => s.activeNodeType)
-  const zoom = useUIStore(s => s.zoom)
-  const pan = useUIStore(s => s.pan)
+  // pan/zoom are refs — we apply transforms imperatively to avoid re-renders on every scroll/drag
+  const panRef = useRef(useUIStore.getState().pan)
+  const zoomRef = useRef(useUIStore.getState().zoom)
   const { setZoom, setPan } = useUIStore.getState()
+  // Tracks whether zoom is above label-readability threshold (re-renders only on threshold crossing)
+  const [zoomAboveThreshold, setZoomAboveThreshold] = useState(zoomRef.current >= 0.7)
   const selectedEdgeId = useUIStore(s => s.selectedEdgeId)
   const selectedCellId = useUIStore(s => s.selectedCellId)
   const pathStart = useUIStore(s => s.pathStart)
@@ -275,6 +310,11 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const mouseRef = useRef({ x: 0, y: 0 })
   const previewLineRef = useRef<Konva.Line>(null)
   const overlayLayerRef = useRef<Konva.Layer>(null)
+  // Group refs for imperative pan/zoom — bypasses React reconciler during scroll/drag
+  const cellsGroupRef = useRef<Konva.Group>(null)
+  const edgesGroupRef = useRef<Konva.Group>(null)
+  const coordsGroupRef = useRef<Konva.Group>(null)
+  const overlayGroupRef = useRef<Konva.Group>(null)
   // RAF coalescing: mousemove fires far faster than 60 fps, so we accumulate cell
   // updates in paintQueueRef and flush them once per animation frame via rafPaintRef.
   // paintStrokedRef ensures exactly one snapshotNow() call per drag stroke,
@@ -385,13 +425,23 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     setPathResult(bfsPath(pathStart, pathEnd, map.edges))
   }, [map?.edges, pathStart, pathEnd, setPathResult])
 
+  // ── Imperative transform: mutates Konva nodes directly, no React re-render ─
+  const applyTransform = useCallback((p: { x: number; y: number }, z: number) => {
+    for (const grp of [cellsGroupRef, edgesGroupRef, coordsGroupRef, overlayGroupRef]) {
+      if (!grp.current) continue
+      grp.current.x(p.x); grp.current.y(p.y)
+      grp.current.scaleX(z); grp.current.scaleY(z)
+      grp.current.getLayer()?.batchDraw()
+    }
+  }, [])
+
   // ── World-space coord helper ──────────────────────────────────────────────
   // Converts screen pixel → world coordinate: worldPx = (screenPx - pan) / zoom
   const worldPos = useCallback((stage: Konva.Stage) => {
     const p = stage.getPointerPosition()
     if (!p) return null
-    return { x: (p.x - pan.x) / zoom, y: (p.y - pan.y) / zoom }
-  }, [pan, zoom])
+    return { x: (p.x - panRef.current.x) / zoomRef.current, y: (p.y - panRef.current.y) / zoomRef.current }
+  }, [])
 
   const getCenterById = useCallback((id: string) => cellCenters.get(id) ?? null, [cellCenters])
 
@@ -403,13 +453,21 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     const pointer = stage.getPointerPosition()
     if (!pointer) return
     const scale = e.evt.deltaY < 0 ? 1.1 : 0.9
-    const newZoom = Math.min(5, Math.max(0.1, zoom * scale))
+    const newZoom = Math.min(5, Math.max(0.1, zoomRef.current * scale))
+    const newPan = {
+      x: pointer.x - ((pointer.x - panRef.current.x) / zoomRef.current) * newZoom,
+      y: pointer.y - ((pointer.y - panRef.current.y) / zoomRef.current) * newZoom,
+    }
+    panRef.current = newPan
+    zoomRef.current = newZoom
+    applyTransform(newPan, newZoom)
+    // Persist to store (for other components); does not trigger re-render in this component
     setZoom(newZoom)
-    setPan({
-      x: pointer.x - ((pointer.x - pan.x) / zoom) * newZoom,
-      y: pointer.y - ((pointer.y - pan.y) / zoom) * newZoom,
-    })
-  }, [zoom, pan, setZoom, setPan])
+    setPan(newPan)
+    // Trigger re-render only when crossing the coord-label readability threshold
+    const above = newZoom >= 0.7
+    setZoomAboveThreshold(prev => prev !== above ? above : prev)
+  }, [applyTransform, setZoom, setPan])
 
   const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (!map) return
@@ -462,7 +520,10 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       const dx = e.evt.clientX - lastPanPos.current.x
       const dy = e.evt.clientY - lastPanPos.current.y
       lastPanPos.current = { x: e.evt.clientX, y: e.evt.clientY }
-      setPan({ x: pan.x + dx, y: pan.y + dy })
+      const newPan = { x: panRef.current.x + dx, y: panRef.current.y + dy }
+      panRef.current = newPan
+      applyTransform(newPan, zoomRef.current)
+      setPan(newPan)
       return
     }
 
@@ -500,7 +561,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     if ((tool === 'type' || tool === 'erase') && e.evt.buttons === 1 && coord) {
       queuePaint(`r${coord.row}c${coord.col}`, tool === 'erase' ? 'lane' : activeNodeType)
     }
-  }, [map, tool, activeNodeType, drawStart, worldPos, pan, setPan, cellCenters, addEdge, queuePaint])
+  }, [map, tool, activeNodeType, drawStart, worldPos, applyTransform, setPan, cellCenters, addEdge, queuePaint])
 
   const handleMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     isPanning.current = false
@@ -552,7 +613,9 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     >
       {/* ── Static cells layer (listening=false for perf) ─────────────── */}
       <Layer listening={false}>
-        <Group x={pan.x} y={pan.y} scaleX={zoom} scaleY={zoom}>
+        <Group ref={cellsGroupRef}
+          x={panRef.current.x} y={panRef.current.y}
+          scaleX={zoomRef.current} scaleY={zoomRef.current}>
           <CellsGroup
             cells={map.cells}
             config={map.config}
@@ -568,7 +631,9 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
 
       {/* ── Edges layer (has click handlers) ─────────────────────────── */}
       <Layer>
-        <Group x={pan.x} y={pan.y} scaleX={zoom} scaleY={zoom}>
+        <Group ref={edgesGroupRef}
+          x={panRef.current.x} y={panRef.current.y}
+          scaleX={zoomRef.current} scaleY={zoomRef.current}>
           <EdgesGroup
             edges={map.edges}
             cellCenters={cellCenters}
@@ -580,28 +645,17 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
         </Group>
       </Layer>
 
-      {/* ── Cell coordinate labels ────────────────────────────────────── */}
-      {showCellCoords && (() => {
+      {/* ── Cell coordinate labels (only when zoomed in enough to read) ───── */}
+      {showCellCoords && zoomAboveThreshold && (() => {
         const halfH = map.config.cellShape === 'hexagon' ? HEX_RADIUS
           : map.config.cellShape === 'rectangle' ? RECT_H / 2
           : SQUARE_SIZE / 2
         return (
           <Layer listening={false}>
-            <Group x={pan.x} y={pan.y} scaleX={zoom} scaleY={zoom}>
-              {map.cells.map(cell => {
-                const c = getCellCenter(cell.coord, map.config)
-                return (
-                  <React.Fragment key={`coord-${cell.id}`}>
-                    <Circle x={c.x} y={c.y} radius={3} fill="#ffffff" opacity={0.85} listening={false} />
-                    <Text
-                      x={c.x - 25} y={c.y - halfH + 2}
-                      text={`(${cell.coord.row},${cell.coord.col})`}
-                      fontSize={7} fill="#94a3b8" fontFamily="monospace"
-                      width={50} align="center" listening={false}
-                    />
-                  </React.Fragment>
-                )
-              })}
+            <Group ref={coordsGroupRef}
+              x={panRef.current.x} y={panRef.current.y}
+              scaleX={zoomRef.current} scaleY={zoomRef.current}>
+              <CoordsGroup cells={map.cells} config={map.config} halfH={halfH} />
             </Group>
           </Layer>
         )
@@ -609,7 +663,9 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
 
       {/* ── Overlay: hover + preview + trace + path endpoints ─────────── */}
       <Layer ref={overlayLayerRef} listening={false}>
-        <Group x={pan.x} y={pan.y} scaleX={zoom} scaleY={zoom}>
+        <Group ref={overlayGroupRef}
+          x={panRef.current.x} y={panRef.current.y}
+          scaleX={zoomRef.current} scaleY={zoomRef.current}>
           {/* Hover highlight */}
           {hoverCenter && (
             shape === 'hexagon'
