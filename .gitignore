@@ -27,6 +27,9 @@ env/
 *.tsbuildinfo
 apps/web/dist/
 
+# Test coverage
+apps/web/coverage/
+
 # Bun
 bun.lockb
 

@@ -65,6 +65,16 @@ cd apps/api && uv run uvicorn src.main:app --reload  # http://localhost:8000
 - State in Zustand stores (`apps/web/src/store/`)
 - All canvas drawing via React-Konva
 
+## Git Workflow
+
+- **Commit frequently** — after every logical unit of work (a feature, a fix, a refactor).
+  Never batch unrelated changes into one commit.
+- **Commit messages** — imperative present tense, concise subject line, body explaining *why*
+  if the change is non-obvious. Example: `Fix API startup race on Docker DNS resolution`.
+- **Push after every commit** — always push to `origin main` immediately after committing
+  so the remote stays current. Do not let commits accumulate locally.
+- Remote: `https://github.com/ps-icode/naxa.git`
+
 ## Do Not
 - Do not add auth until explicitly requested
 - Do not use `any` in TypeScript
