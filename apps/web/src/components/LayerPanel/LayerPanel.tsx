@@ -10,6 +10,16 @@ const ICONS: Record<string, string> = {
   charging: '⚡', parking: 'P', blocked: '✕', junction: '✦',
 }
 
+const LAYER_INFO: Record<string, string> = {
+  lane:        'Navigable pathways connecting all cells. Draw by dragging between adjacent cells.',
+  source:      'Pickup / induction points where robots begin tasks (pick, feeder, conveyor_in…).',
+  destination: 'Drop-off / delivery endpoints where robots complete tasks (drop, bin, conveyor_out…).',
+  charging:    'Battery charging stations. Robots route here when power is low.',
+  parking:     'Idle or maintenance zones where robots wait between tasks.',
+  blocked:     'Obstacles and no-go zones. Robots cannot enter or traverse these cells.',
+  junction:    'Topology decision points: merge, diverge, crossover, or roundabout intersections.',
+}
+
 export default function LayerPanel() {
   const { map, toggleLayerVisibility, savedList, loadMap, setCellSubtype, setCellLabel } = useGridStore()
   const { tool, activeNodeType, setActiveNodeType, showToast, setShowNewMapModal, selectedCellId } = useUIStore()
@@ -36,6 +46,7 @@ export default function LayerPanel() {
             return (
               <div
                 key={layer.id}
+                title={LAYER_INFO[layer.nodeType]}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7,
                   padding: '6px 8px', borderRadius: 5, cursor: 'pointer',
@@ -53,7 +64,10 @@ export default function LayerPanel() {
                   onClick={e => { e.stopPropagation(); toggleLayerVisibility(layer.id) }}
                 />
                 <span style={{ fontSize: 12, color: '#475569', width: 12, textAlign: 'center', flexShrink: 0 }}>{ICONS[layer.nodeType]}</span>
-                <span style={{ fontSize: 12, flex: 1, color: layer.visible ? '#cbd5e1' : '#334155' }}>{layer.name}</span>
+                <span style={{ fontSize: 12, flex: 1, color: layer.visible ? '#cbd5e1' : '#334155' }}>
+                  {layer.name}
+                  <span style={{ fontSize: 9, color: '#334155', marginLeft: 4 }} title={LAYER_INFO[layer.nodeType]}>ⓘ</span>
+                </span>
                 {isActive && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#60a5fa' }} />}
               </div>
             )

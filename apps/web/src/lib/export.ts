@@ -169,11 +169,11 @@ export function exportCAD(map: GridMap): void {
     }))
   }
 
-  // Dimension annotations
-  const gridLeft = DIM_PAD
-  const gridTop = DIM_PAD
-  const gridRight = DIM_PAD + canvasW - 2 * GRID_PADDING
-  const gridBottom = DIM_PAD + canvasH - 2 * GRID_PADDING
+  // Dimension annotations — anchored at actual cell grid edges (not canvas edges)
+  const gridLeft   = DIM_PAD + GRID_PADDING
+  const gridTop    = DIM_PAD + GRID_PADDING
+  const gridRight  = DIM_PAD + canvasW - GRID_PADDING
+  const gridBottom = DIM_PAD + canvasH - GRID_PADDING
   const annStroke = '#475569'
   const annFill = '#94a3b8'
 
