@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,10 +8,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from .db.session import create_db_and_tables
 from .routes import maps
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    create_db_and_tables()
+    # Retry with backoff: Docker's internal DNS can take a moment to resolve
+    # service hostnames even after the postgres healthcheck passes.
+    for attempt in range(5):
+        try:
+            create_db_and_tables()
+            break
+        except Exception as exc:
+            if attempt == 4:
+                raise
+            wait = 2 ** attempt
+            logger.warning("DB connection failed (attempt %d/5): %s — retrying in %ds", attempt + 1, exc, wait)
+            await asyncio.sleep(wait)
     yield
 
 
