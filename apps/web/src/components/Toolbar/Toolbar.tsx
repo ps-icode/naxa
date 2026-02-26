@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useGridStore } from '../../store/gridStore'
 import { useUIStore } from '../../store/uiStore'
 import { validateConnectivity, buildTraceRoutes } from '../../lib/graph'
@@ -46,6 +47,9 @@ export default function Toolbar() {
     setTraceRoutes, setTraceRunning, setTraceSpeed,
     showCellCoords, toggleCellCoords,
   } = useUIStore()
+
+  const [routesExpanded, setRoutesExpanded] = useState(false)
+  useEffect(() => { if (!traceRunning) setRoutesExpanded(false) }, [traceRunning])
 
   const canUndo = past.length > 0
   const canRedo = future.length > 0
@@ -161,14 +165,26 @@ export default function Toolbar() {
         </div>
       )}
 
-      {traceRunning && traceRoutes.length > 0 && (
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 200 }}>
-          {traceRoutes.map((r, i) => (
-            <span key={i} style={{ fontSize: 10, padding: '2px 5px', borderRadius: 3, background: r.color + '33', color: r.color, border: `1px solid ${r.color}66` }}>
-              {r.label}
-            </span>
-          ))}
-        </div>
+      {traceRunning && (
+        <>
+          <button
+            onClick={() => setRoutesExpanded(e => !e)}
+            style={{ fontSize: 11, color: '#64748b', background: 'none', border: '1px solid #1e293b',
+                     borderRadius: 4, padding: '3px 8px', cursor: 'pointer' }}
+          >
+            Routes ({traceRoutes.length}) {routesExpanded ? '▲' : '▼'}
+          </button>
+          {routesExpanded && (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 200 }}>
+              {traceRoutes.map((r, i) => (
+                <span key={i} style={{ fontSize: 10, padding: '2px 5px', borderRadius: 3,
+                  background: r.color + '33', color: r.color, border: `1px solid ${r.color}66` }}>
+                  {r.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <div style={{ flex: 1 }} />
