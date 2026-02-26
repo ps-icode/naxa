@@ -16,36 +16,13 @@ const TOOLS: { id: Tool; label: string; key: string; tip: string }[] = [
 
 export default function Toolbar() {
   const { map, past, future, undo, redo, setSavedList, loadMap } = useGridStore()
-  const handleLoadJSON = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.json'
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file) return
-      const reader = new FileReader()
-      reader.onload = (ev) => {
-        try {
-          const parsed = JSON.parse(ev.target?.result as string)
-          if (!parsed.cells || !parsed.config || !parsed.edges || !parsed.layers) {
-            throw new Error('Invalid map file')
-          }
-          loadMap(parsed)
-          showToast(`Loaded "${parsed.name}" ✓`)
-        } catch {
-          showToast('Invalid map file', 'error')
-        }
-      }
-      reader.readAsText(file)
-    }
-    input.click()
-  }
   const {
     tool, setTool, showToast,
     setValidationResult, clearPath,
     traceRunning, traceSpeed, traceRoutes,
     setTraceRoutes, setTraceRunning, setTraceSpeed,
     showCellCoords, toggleCellCoords,
+    mapBg, toggleMapBg,
   } = useUIStore()
 
   const [routesExpanded, setRoutesExpanded] = useState(false)
@@ -199,9 +176,8 @@ export default function Toolbar() {
 
       <button onClick={handleValidate} disabled={!map} style={actionBtn('#1e293b')} title="Validate graph connectivity">Validate</button>
       <button onClick={() => map && exportJSON(map)} disabled={!map} style={actionBtn('#1e293b')} title="Export as JSON graph">JSON</button>
-      <button onClick={handleLoadJSON} style={actionBtn('#1e293b')} title="Load map from a .naxa.json file">Load</button>
-      <button onClick={() => map && exportPNG(map)} disabled={!map} style={actionBtn('#1e293b')} title="Export as PNG image">PNG</button>
-      <button onClick={() => map && exportCAD(map)} disabled={!map} style={actionBtn('#1e293b')} title="Export CAD-style PNG with measurements and cell coordinates">CAD</button>
+      <button onClick={() => map && exportPNG(map, mapBg)} disabled={!map} style={actionBtn('#1e293b')} title="Export as PNG image">PNG</button>
+      <button onClick={() => map && exportCAD(map, mapBg)} disabled={!map} style={actionBtn('#1e293b')} title="Export CAD-style PNG with measurements and cell coordinates">CAD</button>
       <button
         onClick={toggleCellCoords}
         disabled={!map}
@@ -213,6 +189,18 @@ export default function Toolbar() {
         }}
       >
         Coords
+      </button>
+      <button
+        onClick={toggleMapBg}
+        disabled={!map}
+        title="Toggle canvas background between dark and light"
+        style={{
+          ...actionBtn(mapBg === 'light' ? '#f1f5f9' : '#1e293b'),
+          border: mapBg === 'light' ? '1px solid #94a3b8' : '1px solid #1e293b',
+          color: mapBg === 'light' ? '#334155' : '#e2e8f0',
+        }}
+      >
+        {mapBg === 'light' ? '☀ Light' : '☾ Dark'}
       </button>
       <button onClick={handleSave} disabled={!map} style={actionBtn('#1e40af')}>Save</button>
     </div>

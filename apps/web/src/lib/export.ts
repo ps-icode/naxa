@@ -10,8 +10,16 @@ const NODE_ICONS: Record<string, string> = {
   source: 'S', destination: 'D', charging: '⚡', parking: 'P', blocked: '✕', junction: '✦',
 }
 
+type BgMode = 'dark' | 'light'
+
+const EXPORT_THEMES = {
+  dark:  { bg: '#080818', cell: '#0d1424', stroke: '#1e293b', dot: '#ffffff', coordText: '#94a3b8', annStroke: '#475569', annText: '#94a3b8' },
+  light: { bg: '#f1f5f9', cell: '#e2e8f0', stroke: '#94a3b8', dot: '#334155', coordText: '#475569', annStroke: '#94a3b8', annText: '#475569' },
+} as const
+
 /** Exports the map to a clean PNG that matches the screen — zoom/pan independent. */
-export function exportPNG(map: GridMap): void {
+export function exportPNG(map: GridMap, bg: BgMode = 'dark'): void {
+  const theme = EXPORT_THEMES[bg]
   const visibleTypes = new Set(
     map.layers.filter(l => l.visible).map(l => l.nodeType),
   )
@@ -29,7 +37,7 @@ export function exportPNG(map: GridMap): void {
   stage.add(layer)
 
   // Background
-  layer.add(new Konva.Rect({ x: 0, y: 0, width: w, height: h, fill: '#080818' }))
+  layer.add(new Konva.Rect({ x: 0, y: 0, width: w, height: h, fill: theme.bg }))
 
   const shape = map.config.cellShape
 
@@ -40,8 +48,8 @@ export function exportPNG(map: GridMap): void {
     const opacity = typed ? 0.8 : 1
 
     const center = getCellCenter(cell.coord, map.config)
-    const fill = typed ? NODE_TYPE_COLORS[cell.nodeType] : '#0d1424'
-    const stroke = typed ? NODE_TYPE_COLORS[cell.nodeType] : '#1e293b'
+    const fill = typed ? NODE_TYPE_COLORS[cell.nodeType] : theme.cell
+    const stroke = typed ? NODE_TYPE_COLORS[cell.nodeType] : theme.stroke
     const strokeWidth = typed ? 2 : 1
 
     if (!visible) continue
@@ -64,8 +72,11 @@ export function exportPNG(map: GridMap): void {
     if (typed) {
       const text = cell.label ?? cell.subtype?.replace(/_/g, ' ') ?? NODE_ICONS[cell.nodeType] ?? ''
       const cw = shape === 'hexagon' ? 32 : shape === 'rectangle' ? RECT_W : SQUARE_SIZE
+      const halfH = shape === 'hexagon' ? HEX_RADIUS
+        : shape === 'rectangle' ? RECT_H / 2
+        : SQUARE_SIZE / 2
       layer.add(new Konva.Text({
-        x: center.x - cw / 2, y: center.y - 7,
+        x: center.x - cw / 2, y: center.y - halfH + 4,
         width: cw, text,
         fontSize: cell.subtype ? 8 : 10, fontStyle: 'bold',
         fill: '#fff', align: 'center', listening: false,
@@ -116,7 +127,8 @@ export function exportPNG(map: GridMap): void {
 const DIM_PAD = 70
 
 /** Exports a CAD-style PNG: cell outlines, center dots, (row,col) labels, and dimension annotations. */
-export function exportCAD(map: GridMap): void {
+export function exportCAD(map: GridMap, bg: BgMode = 'dark'): void {
+  const theme = EXPORT_THEMES[bg]
   const { w: canvasW, h: canvasH } = totalCanvasSize(map.config)
   const stageW = canvasW + DIM_PAD
   const stageH = canvasH + DIM_PAD
@@ -130,12 +142,12 @@ export function exportCAD(map: GridMap): void {
   stage.add(layer)
 
   // Background
-  layer.add(new Konva.Rect({ x: 0, y: 0, width: stageW, height: stageH, fill: '#080818' }))
+  layer.add(new Konva.Rect({ x: 0, y: 0, width: stageW, height: stageH, fill: theme.bg }))
 
   const shape = map.config.cellShape
   const { rows, cols, cellSizeMeters } = map.config
 
-  // Cells — outlines only, no fill, no text, no edges
+  // Cells — outlines only, no fill, no edges
   for (const cell of map.cells) {
     const center = getCellCenter(cell.coord, map.config)
     const cx = center.x + DIM_PAD
@@ -157,15 +169,12 @@ export function exportCAD(map: GridMap): void {
       }))
     }
 
-    // Center dot + coordinate label (near top edge to avoid collision with node icon)
-    const halfH = shape === 'hexagon' ? HEX_RADIUS
-      : shape === 'rectangle' ? RECT_H / 2
-      : SQUARE_SIZE / 2
-    layer.add(new Konva.Circle({ x: cx, y: cy, radius: 2.5, fill: '#ffffff' }))
+    // Center dot + coordinate label below center
+    layer.add(new Konva.Circle({ x: cx, y: cy, radius: 2.5, fill: theme.dot }))
     layer.add(new Konva.Text({
-      x: cx - 25, y: cy - halfH + 2, width: 50, align: 'center',
+      x: cx - 25, y: cy + 5, width: 50, align: 'center',
       text: `(${cell.coord.row},${cell.coord.col})`,
-      fontSize: 7, fill: '#94a3b8', fontFamily: 'monospace',
+      fontSize: 7, fill: theme.coordText, fontFamily: 'monospace',
     }))
   }
 
@@ -174,8 +183,15 @@ export function exportCAD(map: GridMap): void {
   const gridTop    = DIM_PAD + GRID_PADDING
   const gridRight  = DIM_PAD + canvasW - GRID_PADDING
   const gridBottom = DIM_PAD + canvasH - GRID_PADDING
-  const annStroke = '#475569'
-  const annFill = '#94a3b8'
+  const { annStroke, annText } = theme
+
+  // Compute true physical dimensions (hex geometry differs from square/rect)
+  const widthM  = shape === 'hexagon'
+    ? (cols + 0.5) * Math.sqrt(3) * cellSizeMeters
+    : cols * cellSizeMeters
+  const heightM = shape === 'hexagon'
+    ? (rows * 1.5 + 0.5) * cellSizeMeters
+    : rows * cellSizeMeters
 
   // A. Horizontal dimension (top)
   layer.add(new Konva.Line({ points: [gridLeft, DIM_PAD - 18, gridLeft, DIM_PAD - 8], stroke: annStroke, strokeWidth: 1 }))
@@ -189,8 +205,8 @@ export function exportCAD(map: GridMap): void {
   layer.add(new Konva.Text({
     x: gridLeft, y: DIM_PAD - 26,
     width: gridRight - gridLeft, align: 'center',
-    text: `${(cols * cellSizeMeters).toFixed(2)} m`,
-    fontSize: 9, fill: annFill, fontFamily: 'monospace',
+    text: `${widthM.toFixed(2)} m`,
+    fontSize: 9, fill: annText, fontFamily: 'monospace',
   }))
 
   // B. Vertical dimension (left)
@@ -204,8 +220,8 @@ export function exportCAD(map: GridMap): void {
   }))
   const vLabel = new Konva.Text({
     x: DIM_PAD - 13, y: gridTop + (gridBottom - gridTop) / 2,
-    text: `${(rows * cellSizeMeters).toFixed(2)} m`,
-    fontSize: 9, fill: annFill, fontFamily: 'monospace',
+    text: `${heightM.toFixed(2)} m`,
+    fontSize: 9, fill: annText, fontFamily: 'monospace',
     rotation: -90,
   })
   vLabel.offsetX(vLabel.width() / 2)
@@ -215,7 +231,7 @@ export function exportCAD(map: GridMap): void {
   layer.add(new Konva.Text({
     x: stageW - 220, y: stageH - 20,
     text: `${map.name}  ·  ${rows}×${cols}  ·  ${shape}  ·  ${cellSizeMeters} m/cell`,
-    fontSize: 9, fill: '#334155',
+    fontSize: 9, fill: annText,
   }))
 
   layer.batchDraw()

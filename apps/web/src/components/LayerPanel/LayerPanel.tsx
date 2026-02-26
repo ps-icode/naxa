@@ -24,6 +24,31 @@ export default function LayerPanel() {
   const { map, toggleLayerVisibility, savedList, loadMap, setCellSubtype, setCellLabel } = useGridStore()
   const { tool, activeNodeType, setActiveNodeType, showToast, setShowNewMapModal, selectedCellId } = useUIStore()
 
+  const handleLoadJSON = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target?.result as string)
+          if (!parsed.cells || !parsed.config || !parsed.edges || !parsed.layers) {
+            throw new Error('Invalid map file')
+          }
+          loadMap(parsed)
+          showToast(`Loaded "${parsed.name}" ✓`)
+        } catch {
+          showToast('Invalid map file', 'error')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
+
   if (!map) return <EmptyState onNew={() => setShowNewMapModal(true)} />
 
   const selectedCell = selectedCellId ? map.cells.find(c => c.id === selectedCellId) : null
@@ -119,7 +144,10 @@ export default function LayerPanel() {
         </div>
       )}
 
-      <button onClick={() => setShowNewMapModal(true)} style={newMapBtn}>+ New Map</button>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={() => setShowNewMapModal(true)} style={{ ...newMapBtn, flex: 1 }}>+ New Map</button>
+        <button onClick={handleLoadJSON} style={loadBtn} title="Load map from a .naxa.json file">↑ Load</button>
+      </div>
     </div>
   )
 }
@@ -217,4 +245,10 @@ const newMapBtn: React.CSSProperties = {
   width: '100%', padding: '7px 0', borderRadius: 5,
   border: '1px solid #1e40af', background: '#1e3a8a',
   color: '#93c5fd', fontSize: 12, cursor: 'pointer', fontWeight: 500,
+}
+
+const loadBtn: React.CSSProperties = {
+  padding: '7px 10px', borderRadius: 5,
+  border: '1px solid #1e293b', background: '#0a0f1e',
+  color: '#64748b', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
 }

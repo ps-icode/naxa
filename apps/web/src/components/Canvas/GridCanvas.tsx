@@ -19,8 +19,12 @@ import type { GridCell, GridMap, Edge, CellCoord } from '@naxa/core'
 const EDGE_COLOR = '#60a5fa'
 const PATH_COLOR = '#f59e0b'
 const SELECT_GLOW = '#a78bfa'
-const CELL_STROKE = '#1e293b'
-const CELL_BG = '#0d1424'
+
+// Background themes: dark (default) and light
+export const BG_THEMES = {
+  dark:  { canvas: '#080818', cell: '#0d1424', stroke: '#1e293b', dot: '#ffffff', coordText: '#94a3b8' },
+  light: { canvas: '#f1f5f9', cell: '#e2e8f0', stroke: '#94a3b8', dot: '#334155', coordText: '#475569' },
+} as const
 
 const NODE_ICONS: Record<string, string> = {
   source: 'S', destination: 'D', charging: '⚡', parking: 'P', blocked: '✕', junction: '✦',
@@ -36,10 +40,13 @@ interface CellItemProps {
   isSelected: boolean
   layerVisible: boolean
   unreachable: boolean
+  cellBg: string
+  cellStroke: string
 }
 
 const CellItem = memo(function CellItem({
   cell, config, isPathNode, isPathStart, isPathEnd, isSelected, layerVisible, unreachable,
+  cellBg, cellStroke,
 }: CellItemProps) {
   const center = getCellCenter(cell.coord, config)
   const shape = config.cellShape
@@ -48,12 +55,12 @@ const CellItem = memo(function CellItem({
   const fill = isPathStart || isPathEnd ? '#d97706'
     : isPathNode ? '#78350f'
     : typed ? NODE_TYPE_COLORS[cell.nodeType]
-    : CELL_BG
+    : cellBg
 
   const borderColor = unreachable ? '#ef4444'
     : isSelected ? '#a78bfa'
     : typed ? NODE_TYPE_COLORS[cell.nodeType]
-    : CELL_STROKE
+    : cellStroke
 
   const borderW = typed || isSelected || unreachable ? 2 : 1
   const opacity = layerVisible ? (typed ? 0.8 : 1) : 0.1
@@ -79,7 +86,7 @@ const CellItem = memo(function CellItem({
         />
         {displayText && (
           <Text
-            x={center.x - 16} y={center.y - 7}
+            x={center.x - 16} y={center.y - HEX_RADIUS + 4}
             width={32} fontSize={typed && cell.subtype ? 8 : 10}
             fontStyle="bold" text={displayText}
             fill="#fff" align="center" listening={false}
@@ -103,7 +110,7 @@ const CellItem = memo(function CellItem({
       />
       {displayText && (
         <Text
-          x={center.x - w / 2} y={center.y - 7}
+          x={center.x - w / 2} y={center.y - h / 2 + 4}
           width={w} fontSize={typed && cell.subtype ? 8 : 10}
           fontStyle="bold" text={displayText}
           fill="#fff" align="center" listening={false}
@@ -123,10 +130,13 @@ interface CellsGroupProps {
   pathEnd: string | null
   selectedCellId: string | null
   unreachableSet: Set<string>
+  cellBg: string
+  cellStroke: string
 }
 
 const CellsGroup = memo(function CellsGroup({
   cells, config, layerVisibility, pathSet, pathStart, pathEnd, selectedCellId, unreachableSet,
+  cellBg, cellStroke,
 }: CellsGroupProps) {
   return (
     <>
@@ -141,6 +151,8 @@ const CellsGroup = memo(function CellsGroup({
           isSelected={cell.id === selectedCellId}
           layerVisible={layerVisibility.get(cell.nodeType) ?? true}
           unreachable={unreachableSet.has(cell.id)}
+          cellBg={cellBg}
+          cellStroke={cellStroke}
         />
       ))}
     </>
@@ -153,7 +165,9 @@ const CellsGroup = memo(function CellsGroup({
   prev.pathStart === next.pathStart &&
   prev.pathEnd === next.pathEnd &&
   prev.selectedCellId === next.selectedCellId &&
-  prev.unreachableSet === next.unreachableSet,
+  prev.unreachableSet === next.unreachableSet &&
+  prev.cellBg === next.cellBg &&
+  prev.cellStroke === next.cellStroke,
 )
 
 // ── Memoized Edge ─────────────────────────────────────────────────────────────
@@ -243,21 +257,22 @@ const EdgesGroup = memo(function EdgesGroup({
 interface CoordsGroupProps {
   cells: GridMap['cells']
   config: GridMap['config']
-  halfH: number
+  dotColor: string
+  labelColor: string
 }
 
-const CoordsGroup = memo(function CoordsGroup({ cells, config, halfH }: CoordsGroupProps) {
+const CoordsGroup = memo(function CoordsGroup({ cells, config, dotColor, labelColor }: CoordsGroupProps) {
   return (
     <>
       {cells.map(cell => {
         const c = getCellCenter(cell.coord, config)
         return (
           <React.Fragment key={`coord-${cell.id}`}>
-            <Circle x={c.x} y={c.y} radius={3} fill="#ffffff" opacity={0.85} listening={false} />
+            <Circle x={c.x} y={c.y} radius={3} fill={dotColor} opacity={0.85} listening={false} />
             <Text
-              x={c.x - 25} y={c.y - halfH + 2}
+              x={c.x - 25} y={c.y + 5}
               text={`(${cell.coord.row},${cell.coord.col})`}
-              fontSize={7} fill="#94a3b8" fontFamily="monospace"
+              fontSize={7} fill={labelColor} fontFamily="monospace"
               width={50} align="center" listening={false}
             />
           </React.Fragment>
@@ -268,7 +283,8 @@ const CoordsGroup = memo(function CoordsGroup({ cells, config, halfH }: CoordsGr
 }, (prev, next) =>
   prev.cells === next.cells &&
   prev.config === next.config &&
-  prev.halfH === next.halfH,
+  prev.dotColor === next.dotColor &&
+  prev.labelColor === next.labelColor,
 )
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -284,6 +300,8 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
 
   const tool = useUIStore(s => s.tool)
   const activeNodeType = useUIStore(s => s.activeNodeType)
+  const mapBg = useUIStore(s => s.mapBg)
+  const bgTheme = BG_THEMES[mapBg]
   // pan/zoom are refs — we apply transforms imperatively to avoid re-renders on every scroll/drag
   const panRef = useRef(useUIStore.getState().pan)
   const zoomRef = useRef(useUIStore.getState().zoom)
@@ -609,7 +627,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onContextMenu={(e) => e.evt.preventDefault()}
-      style={{ cursor: drawStart ? 'crosshair' : tool === 'erase' ? 'cell' : 'default' }}
+      style={{ cursor: drawStart ? 'crosshair' : tool === 'erase' ? 'cell' : 'default', background: bgTheme.canvas }}
     >
       {/* ── Static cells layer (listening=false for perf) ─────────────── */}
       <Layer listening={false}>
@@ -625,6 +643,8 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
             pathEnd={pathEnd}
             selectedCellId={selectedCellId}
             unreachableSet={unreachableSet}
+            cellBg={bgTheme.cell}
+            cellStroke={bgTheme.stroke}
           />
         </Group>
       </Layer>
@@ -646,20 +666,20 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       </Layer>
 
       {/* ── Cell coordinate labels (only when zoomed in enough to read) ───── */}
-      {showCellCoords && zoomAboveThreshold && (() => {
-        const halfH = map.config.cellShape === 'hexagon' ? HEX_RADIUS
-          : map.config.cellShape === 'rectangle' ? RECT_H / 2
-          : SQUARE_SIZE / 2
-        return (
-          <Layer listening={false}>
-            <Group ref={coordsGroupRef}
-              x={panRef.current.x} y={panRef.current.y}
-              scaleX={zoomRef.current} scaleY={zoomRef.current}>
-              <CoordsGroup cells={map.cells} config={map.config} halfH={halfH} />
-            </Group>
-          </Layer>
-        )
-      })()}
+      {showCellCoords && zoomAboveThreshold && (
+        <Layer listening={false}>
+          <Group ref={coordsGroupRef}
+            x={panRef.current.x} y={panRef.current.y}
+            scaleX={zoomRef.current} scaleY={zoomRef.current}>
+            <CoordsGroup
+              cells={map.cells}
+              config={map.config}
+              dotColor={bgTheme.dot}
+              labelColor={bgTheme.coordText}
+            />
+          </Group>
+        </Layer>
+      )}
 
       {/* ── Overlay: hover + preview + trace + path endpoints ─────────── */}
       <Layer ref={overlayLayerRef} listening={false}>

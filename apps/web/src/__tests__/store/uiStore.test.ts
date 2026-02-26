@@ -21,6 +21,7 @@ function freshStore(): void {
     traceRunning: false,
     traceSpeed: 3,
     showCellCoords: false,
+    mapBg: 'dark',
   })
 }
 
@@ -248,5 +249,18 @@ describe('toggleCellCoords', () => {
     useUIStore.setState({ showCellCoords: true })
     useUIStore.getState().toggleCellCoords()
     expect(useUIStore.getState().showCellCoords).toBe(false)
+  })
+})
+
+describe('toggleMapBg', () => {
+  it('toggleMapBg: dark → light', () => {
+    useUIStore.getState().toggleMapBg()
+    expect(useUIStore.getState().mapBg).toBe('light')
+  })
+
+  it('toggleMapBg: light → dark', () => {
+    useUIStore.setState({ mapBg: 'light' })
+    useUIStore.getState().toggleMapBg()
+    expect(useUIStore.getState().mapBg).toBe('dark')
   })
 })
