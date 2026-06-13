@@ -23,6 +23,11 @@ describe('newMap', () => {
     expect(useGridStore.getState().map!.cells.every(c => c.nodeType === 'blocked')).toBe(true)
   })
 
+  it('all cells start as unassigned (assigned: false)', () => {
+    useGridStore.getState().newMap('Test', BASE_CONFIG)
+    expect(useGridStore.getState().map!.cells.every(c => c.assigned === false)).toBe(true)
+  })
+
   it('edge list starts empty', () => {
     useGridStore.getState().newMap('Test', BASE_CONFIG)
     expect(useGridStore.getState().map!.edges).toHaveLength(0)
@@ -46,6 +51,33 @@ describe('loadMap', () => {
     expect(useGridStore.getState().map!.id).toBe('x')
     expect(useGridStore.getState().past).toHaveLength(0)
     expect(useGridStore.getState().future).toHaveLength(0)
+  })
+
+  it('normaliseCells: non-blocked cell without assigned field gets assigned: true', () => {
+    const map = { id: 'x', name: 'X', createdAt: '', updatedAt: '',
+      config: BASE_CONFIG, edges: [], layers: [],
+      cells: [{ id: 'r0c0', coord: { row: 0, col: 0 }, nodeType: 'source' as const }],
+    }
+    useGridStore.getState().loadMap(map)
+    expect(useGridStore.getState().map!.cells[0].assigned).toBe(true)
+  })
+
+  it('normaliseCells: blocked cell without assigned field gets assigned: false', () => {
+    const map = { id: 'x', name: 'X', createdAt: '', updatedAt: '',
+      config: BASE_CONFIG, edges: [], layers: [],
+      cells: [{ id: 'r0c0', coord: { row: 0, col: 0 }, nodeType: 'blocked' as const }],
+    }
+    useGridStore.getState().loadMap(map)
+    expect(useGridStore.getState().map!.cells[0].assigned).toBe(false)
+  })
+
+  it('normaliseCells: cell with explicit assigned field is preserved', () => {
+    const map = { id: 'x', name: 'X', createdAt: '', updatedAt: '',
+      config: BASE_CONFIG, edges: [], layers: [],
+      cells: [{ id: 'r0c0', coord: { row: 0, col: 0 }, nodeType: 'blocked' as const, assigned: true }],
+    }
+    useGridStore.getState().loadMap(map)
+    expect(useGridStore.getState().map!.cells[0].assigned).toBe(true)
   })
 })
 
@@ -99,6 +131,16 @@ describe('setCellType', () => {
     expect(useGridStore.getState().map!.cells.find(c => c.id === 'r0c0')!.nodeType).toBe('source')
   })
 
+  it('marks cell as assigned: true', () => {
+    useGridStore.getState().setCellType('r0c0', 'source')
+    expect(useGridStore.getState().map!.cells.find(c => c.id === 'r0c0')!.assigned).toBe(true)
+  })
+
+  it('marks explicitly-blocked cell as assigned: true (distinguishes from default)', () => {
+    useGridStore.getState().setCellType('r0c0', 'blocked')
+    expect(useGridStore.getState().map!.cells.find(c => c.id === 'r0c0')!.assigned).toBe(true)
+  })
+
   it('resets subtype when type changes', () => {
     // Prime the cell with a subtype
     useGridStore.setState(s => ({
@@ -136,6 +178,16 @@ describe('setCellTypeBatch', () => {
     expect(cells.find(c => c.id === 'r0c1')!.nodeType).toBe('destination')
   })
 
+  it('marks updated cells as assigned: true', () => {
+    useGridStore.getState().setCellTypeBatch([{ id: 'r0c0', nodeType: 'source' }])
+    expect(useGridStore.getState().map!.cells.find(c => c.id === 'r0c0')!.assigned).toBe(true)
+  })
+
+  it('leaves unaffected cells unchanged', () => {
+    useGridStore.getState().setCellTypeBatch([{ id: 'r0c0', nodeType: 'source' }])
+    expect(useGridStore.getState().map!.cells.find(c => c.id === 'r0c1')!.assigned).toBe(false)
+  })
+
   it('does NOT push snapshot — caller must call snapshotNow() before stroke', () => {
     useGridStore.getState().setCellTypeBatch([{ id: 'r0c0', nodeType: 'source' }])
     expect(useGridStore.getState().past).toHaveLength(0)
@@ -145,6 +197,60 @@ describe('setCellTypeBatch', () => {
     const before = useGridStore.getState().map
     useGridStore.getState().setCellTypeBatch([])
     expect(useGridStore.getState().map).toBe(before)
+  })
+})
+
+// ── clearCellBatch ────────────────────────────────────────────────────────────
+
+describe('clearCellBatch', () => {
+  beforeEach(() => { useGridStore.getState().newMap('Test', BASE_CONFIG) })
+
+  it('resets cells to blocked nodeType', () => {
+    useGridStore.getState().setCellType('r0c0', 'source')
+    useGridStore.getState().clearCellBatch(['r0c0'])
+    expect(useGridStore.getState().map!.cells.find(c => c.id === 'r0c0')!.nodeType).toBe('blocked')
+  })
+
+  it('sets assigned: false (unassigned state, not explicit blocked)', () => {
+    useGridStore.getState().setCellType('r0c0', 'source')
+    useGridStore.getState().clearCellBatch(['r0c0'])
+    expect(useGridStore.getState().map!.cells.find(c => c.id === 'r0c0')!.assigned).toBe(false)
+  })
+
+  it('clears subtype and label', () => {
+    useGridStore.getState().setCellType('r0c0', 'source')
+    useGridStore.getState().setCellSubtype('r0c0', 'pick')
+    useGridStore.getState().setCellLabel('r0c0', 'Station')
+    useGridStore.getState().clearCellBatch(['r0c0'])
+    const cell = useGridStore.getState().map!.cells.find(c => c.id === 'r0c0')!
+    expect(cell.subtype).toBeUndefined()
+    expect(cell.label).toBeUndefined()
+  })
+
+  it('only affects the specified cell ids', () => {
+    useGridStore.getState().setCellType('r0c0', 'source')
+    useGridStore.getState().setCellType('r0c1', 'destination')
+    useGridStore.getState().clearCellBatch(['r0c0'])
+    expect(useGridStore.getState().map!.cells.find(c => c.id === 'r0c1')!.nodeType).toBe('destination')
+  })
+
+  it('does NOT push snapshot (caller must call snapshotNow before stroke)', () => {
+    useGridStore.getState().setCellType('r0c0', 'source')
+    useGridStore.setState({ past: [] })
+    useGridStore.getState().clearCellBatch(['r0c0'])
+    expect(useGridStore.getState().past).toHaveLength(0)
+  })
+
+  it('is a no-op for empty id list', () => {
+    const before = useGridStore.getState().map
+    useGridStore.getState().clearCellBatch([])
+    expect(useGridStore.getState().map).toBe(before)
+  })
+
+  it('is a no-op when map is null', () => {
+    useGridStore.setState({ map: null })
+    useGridStore.getState().clearCellBatch(['r0c0'])
+    expect(useGridStore.getState().map).toBeNull()
   })
 })
 
@@ -429,6 +535,11 @@ describe('resetCells', () => {
   it('resets all cells to blocked type', () => {
     useGridStore.getState().resetCells()
     expect(useGridStore.getState().map!.cells.every(c => c.nodeType === 'blocked')).toBe(true)
+  })
+
+  it('sets all cells to assigned: false after reset', () => {
+    useGridStore.getState().resetCells()
+    expect(useGridStore.getState().map!.cells.every(c => c.assigned === false)).toBe(true)
   })
 
   it('clears all edges', () => {

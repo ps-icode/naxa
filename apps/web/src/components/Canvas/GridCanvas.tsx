@@ -17,30 +17,30 @@ import { NODE_TYPE_COLORS } from '@naxa/core'
 import type { GridCell, GridMap, Edge, CellCoord, NodeType } from '@naxa/core'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const EDGE_COLOR = '#93c5fd'   // blue-300 — brighter than before for visibility
+const EDGE_COLOR = '#93c5fd'
 const PATH_COLOR = '#f59e0b'
 const SELECT_GLOW = '#a78bfa'
 
+// Improved stroke visibility: the previous #1e293b was too close to cell fill.
 export const BG_THEMES = {
-  dark:  { canvas: '#080818', cell: '#0d1424', stroke: '#1e293b', dot: '#ffffff', coordText: '#94a3b8' },
-  light: { canvas: '#f1f5f9', cell: '#e2e8f0', stroke: '#94a3b8', dot: '#334155', coordText: '#475569' },
+  dark:  { canvas: '#080818', cell: '#0c1020', stroke: '#2d4060', dot: '#ffffff', coordText: '#94a3b8' },
+  light: { canvas: '#f1f5f9', cell: '#dde4f0', stroke: '#8da4c0', dot: '#334155', coordText: '#475569' },
 } as const
 
 const NODE_ICONS: Record<string, string> = {
-  // traversable and lane have no icon — plain passable floor / corridor
+  // traversable and lane intentionally absent — plain passable floor
   source: 'S', destination: 'D', charging: '⚡', parking: 'P', blocked: '✕', junction: '✦',
 }
 
-// ── Hatch pattern for default-blocked cells ───────────────────────────────────
-// Lazy module-level singletons — created once per theme, reused for all cells.
-// Canvas patterns are in world-space: they scale with zoom (intentional — at
-// high zoom you see wider stripes, at low zoom very fine hatching).
+// ── Minimal hatch for unassigned (default) cells ──────────────────────────────
+// Very subtle — just enough to visually distinguish empty cells from typed ones.
+// Colors are nearly identical to the cell background: a faint tone-on-tone stripe.
 let _hatchDark: HTMLCanvasElement | null = null
 let _hatchLight: HTMLCanvasElement | null = null
 
 function makeHatch(bgColor: string, stripeColor: string): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null
-  const sz = 12
+  const sz = 10
   const c = document.createElement('canvas')
   c.width = sz; c.height = sz
   const ctx = c.getContext('2d')
@@ -48,22 +48,22 @@ function makeHatch(bgColor: string, stripeColor: string): HTMLCanvasElement | nu
   ctx.fillStyle = bgColor
   ctx.fillRect(0, 0, sz, sz)
   ctx.strokeStyle = stripeColor
-  ctx.lineWidth = 2
+  ctx.lineWidth = 1
   ctx.beginPath()
-  // Main diagonal + seamless tile edges
-  ctx.moveTo(0, sz);      ctx.lineTo(sz, 0)
-  ctx.moveTo(-3, 3);      ctx.lineTo(3, -3)
-  ctx.moveTo(sz - 3, sz + 3); ctx.lineTo(sz + 3, sz - 3)
+  ctx.moveTo(0, sz); ctx.lineTo(sz, 0)
+  ctx.moveTo(-2, 2); ctx.lineTo(2, -2)
+  ctx.moveTo(sz - 2, sz + 2); ctx.lineTo(sz + 2, sz - 2)
   ctx.stroke()
   return c
 }
 
 function getHatch(isDark: boolean): HTMLCanvasElement | null {
   if (isDark) {
-    if (!_hatchDark) _hatchDark = makeHatch('#130202', '#7f1d1d')
+    // Near-invisible: very slight brightness increase over cell bg (#0c1020)
+    if (!_hatchDark) _hatchDark = makeHatch('#0c1020', '#1e2d45')
     return _hatchDark
   }
-  if (!_hatchLight) _hatchLight = makeHatch('#fff5f5', '#fca5a5')
+  if (!_hatchLight) _hatchLight = makeHatch('#dde4f0', '#b8c8dc')
   return _hatchLight
 }
 
@@ -80,50 +80,49 @@ interface CellItemProps {
   cellBg: string
   cellStroke: string
   isDark: boolean
+  showCellLabels: boolean
 }
 
 const CellItem = memo(function CellItem({
   cell, config, isPathNode, isPathStart, isPathEnd, isSelected, layerVisible, unreachable,
-  cellBg, cellStroke, isDark,
+  cellBg, cellStroke, isDark, showCellLabels,
 }: CellItemProps) {
   const center = getCellCenter(cell.coord, config)
   const shape = config.cellShape
 
-  // Default blocked: 'blocked' type with no subtype — the implicit impassable floor state.
-  // Explicit typed: any other assignment, or 'blocked' WITH a subtype (wall/pillar/etc).
-  const isDefaultBlocked = cell.nodeType === 'blocked' && !cell.subtype
+  // SEMANTIC: unassigned = never explicitly typed by the user (cell.assigned is false/absent).
+  // Explicitly assigned "blocked" now renders as solid red ✕ — same as any other typed cell.
+  const isUnassigned = !cell.assigned
 
-  // Path/selection override always uses solid fill
   const solidFill = isPathStart || isPathEnd ? '#d97706'
     : isPathNode ? '#78350f'
-    : isDefaultBlocked ? cellBg       // base color under hatch (hatch applied separately)
+    : isUnassigned ? cellBg
     : NODE_TYPE_COLORS[cell.nodeType]
 
-  // Hatch canvas for default-blocked cells — null on path highlight or SSR
-  const hatch = isDefaultBlocked && !isPathNode && !isPathStart && !isPathEnd
+  // Minimal hatch only for unassigned cells (not on path highlights)
+  const hatch = isUnassigned && !isPathNode && !isPathStart && !isPathEnd
     ? getHatch(isDark)
     : null
 
   const borderColor = unreachable ? '#ef4444'
     : isSelected ? '#a78bfa'
-    : isDefaultBlocked ? '#ef444433'   // faint red border on default blocked
+    : isUnassigned ? cellStroke
     : NODE_TYPE_COLORS[cell.nodeType]
 
-  const borderW = isDefaultBlocked && !isSelected && !unreachable ? 1 : 2
-  const opacity = layerVisible ? (isDefaultBlocked ? 1 : 0.85) : 0.1
+  const borderW = isUnassigned && !isSelected && !unreachable ? 1 : 2
+  const opacity = layerVisible ? (isUnassigned ? 1 : 0.85) : 0.1
 
-  // Shadows only for interactive states (selected / unreachable) — NOT for regular typed cells.
-  // Canvas shadow compositing is expensive; removing it from all-the-time typed cells is
-  // the single biggest rendering perf win at scale.
   const shadowProps = isSelected
     ? { shadowColor: '#a78bfa', shadowBlur: 14, shadowOpacity: 0.9 }
     : unreachable
       ? { shadowColor: '#ef4444', shadowBlur: 10, shadowOpacity: 0.8 }
       : {}
 
-  const displayText = cell.label ?? cell.subtype?.replace(/_/g, ' ') ?? (isDefaultBlocked ? undefined : NODE_ICONS[cell.nodeType])
+  // Labels only on assigned, non-traversable/lane cells, when labels are toggled on
+  const displayText = showCellLabels && !isUnassigned
+    ? (cell.label ?? cell.subtype?.replace(/_/g, ' ') ?? NODE_ICONS[cell.nodeType])
+    : undefined
 
-  // Fill props: use pattern for default-blocked, solid color for everything else
   const fillProps = hatch
     ? { fillPatternImage: hatch, fillPatternRepeat: 'repeat' as const }
     : { fill: solidFill }
@@ -139,10 +138,10 @@ const CellItem = memo(function CellItem({
         />
         {displayText && (
           <Text
-            x={center.x - 16} y={center.y - HEX_RADIUS + 4}
-            width={32} fontSize={!isDefaultBlocked && cell.subtype ? 8 : 10}
-            fontStyle="bold" text={displayText}
-            fill="#fff" align="center" listening={false}
+            x={center.x - HEX_RADIUS + 4} y={center.y - HEX_RADIUS + 4}
+            width={HEX_RADIUS * 2 - 8}
+            fontSize={cell.subtype ? 7 : 9} fontStyle="bold" text={displayText}
+            fill="#fff" align="left" listening={false}
           />
         )}
       </>
@@ -163,10 +162,10 @@ const CellItem = memo(function CellItem({
       />
       {displayText && (
         <Text
-          x={center.x - w / 2} y={center.y - h / 2 + 4}
-          width={w} fontSize={!isDefaultBlocked && cell.subtype ? 8 : 10}
-          fontStyle="bold" text={displayText}
-          fill="#fff" align="center" listening={false}
+          x={center.x - w / 2 + 3} y={center.y - h / 2 + 3}
+          width={w - 6}
+          fontSize={cell.subtype ? 7 : 9} fontStyle="bold" text={displayText}
+          fill="#fff" align="left" listening={false}
         />
       )}
     </>
@@ -186,11 +185,12 @@ interface CellsGroupProps {
   cellBg: string
   cellStroke: string
   isDark: boolean
+  showCellLabels: boolean
 }
 
 const CellsGroup = memo(function CellsGroup({
   cells, config, layerVisibility, pathSet, pathStart, pathEnd, selectedCellId, unreachableSet,
-  cellBg, cellStroke, isDark,
+  cellBg, cellStroke, isDark, showCellLabels,
 }: CellsGroupProps) {
   return (
     <>
@@ -208,6 +208,7 @@ const CellsGroup = memo(function CellsGroup({
           cellBg={cellBg}
           cellStroke={cellStroke}
           isDark={isDark}
+          showCellLabels={showCellLabels}
         />
       ))}
     </>
@@ -223,7 +224,8 @@ const CellsGroup = memo(function CellsGroup({
   prev.unreachableSet === next.unreachableSet &&
   prev.cellBg === next.cellBg &&
   prev.cellStroke === next.cellStroke &&
-  prev.isDark === next.isDark,
+  prev.isDark === next.isDark &&
+  prev.showCellLabels === next.showCellLabels,
 )
 
 // ── Memoized Edge ─────────────────────────────────────────────────────────────
@@ -246,9 +248,6 @@ const EdgeItem = memo(function EdgeItem({
   const dist = Math.hypot(dx, dy)
   if (dist < 4) return null
 
-  // Asymmetric trim: small from-end so the arrow origin is visible,
-  // larger to-end so the pointer sits cleanly inside the target cell.
-  // For adjacent square cells (dist≈56): arrow runs 56-8-14=34px vs old 12px.
   const trimFrom = Math.min(dist * 0.14, 10)
   const trimTo   = Math.min(dist * 0.25, 16)
   const ux = dx / dist
@@ -361,7 +360,7 @@ interface Props {
 
 export default function GridCanvas({ width, height, stageRef }: Props) {
   const map = useGridStore(s => s.map)
-  const { addEdge, removeEdge, setCellTypeBatch, snapshotNow, toggleEdgeBidirectional } = useGridStore.getState()
+  const { addEdge, removeEdge, setCellTypeBatch, clearCellBatch, snapshotNow, toggleEdgeBidirectional } = useGridStore.getState()
 
   const tool = useUIStore(s => s.tool)
   const activeNodeType = useUIStore(s => s.activeNodeType)
@@ -370,6 +369,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const isDark = mapBg === 'dark'
   const fitRequested = useUIStore(s => s.fitRequested)
   const selection = useUIStore(s => s.selection)
+  const showCellLabels = useUIStore(s => s.showCellLabels)
   const panRef = useRef(useUIStore.getState().pan)
   const zoomRef = useRef(useUIStore.getState().zoom)
   const { setZoom, setPan, setSelection, clearSelection } = useUIStore.getState()
@@ -397,7 +397,9 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const edgesGroupRef = useRef<Konva.Group>(null)
   const coordsGroupRef = useRef<Konva.Group>(null)
   const overlayGroupRef = useRef<Konva.Group>(null)
+  // Two separate RAF queues: paint (assign type) and erase (clear to unassigned)
   const paintQueueRef = useRef<Map<string, NodeType>>(new Map())
+  const eraseQueueRef = useRef<Set<string>>(new Set())
   const rafPaintRef = useRef<number | null>(null)
   const paintStrokedRef = useRef(false)
   const selectAnchor = useRef<{ x: number; y: number } | null>(null)
@@ -407,20 +409,30 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const [hoverCellId, setHoverCellId] = useState<string | null>(null)
   const [traceStep, setTraceStep] = useState<{ routeIdx: number; cellIdx: number }>({ routeIdx: 0, cellIdx: 0 })
 
-  // ── RAF-batched paint flush ────────────────────────────────────────────────
+  // ── RAF-batched paint/erase flush ─────────────────────────────────────────
   const flushPaintQueue = useCallback(() => {
     rafPaintRef.current = null
-    if (paintQueueRef.current.size === 0) return
-    const updates = Array.from(paintQueueRef.current.entries()).map(([id, nodeType]) => ({ id, nodeType }))
-    paintQueueRef.current.clear()
-    setCellTypeBatch(updates)
-  }, [setCellTypeBatch])
+    if (paintQueueRef.current.size > 0) {
+      const updates = Array.from(paintQueueRef.current.entries()).map(([id, nodeType]) => ({ id, nodeType }))
+      paintQueueRef.current.clear()
+      setCellTypeBatch(updates)
+    }
+    if (eraseQueueRef.current.size > 0) {
+      const ids = Array.from(eraseQueueRef.current)
+      eraseQueueRef.current.clear()
+      clearCellBatch(ids)
+    }
+  }, [setCellTypeBatch, clearCellBatch])
 
   const queuePaint = useCallback((id: string, nodeType: NodeType) => {
     paintQueueRef.current.set(id, nodeType)
-    if (!rafPaintRef.current) {
-      rafPaintRef.current = requestAnimationFrame(flushPaintQueue)
-    }
+    if (!rafPaintRef.current) rafPaintRef.current = requestAnimationFrame(flushPaintQueue)
+  }, [flushPaintQueue])
+
+  // Erase = reset cell to unassigned (removes type, subtype, label)
+  const queueErase = useCallback((id: string) => {
+    eraseQueueRef.current.add(id)
+    if (!rafPaintRef.current) rafPaintRef.current = requestAnimationFrame(flushPaintQueue)
   }, [flushPaintQueue])
 
   // ── Derived data ──────────────────────────────────────────────────────────
@@ -429,9 +441,6 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     return new Map(map.cells.map(c => [c.id, c]))
   }, [map?.cells])
 
-  // cellCenters depends ONLY on config (grid dimensions + shape), not on cell types.
-  // This prevents O(n) Map rebuild on every paint stroke — the single biggest perf win.
-  // Coords never change after map creation; only types/subtypes change during editing.
   const cellCenters = useMemo(() => {
     if (!map) return new Map<string, { x: number; y: number }>()
     const m = new Map<string, { x: number; y: number }>()
@@ -441,7 +450,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       }
     }
     return m
-  }, [map?.config])  // NOT map?.cells — coords are stable after map creation
+  }, [map?.config])
 
   const layerVisibility = useMemo(() => {
     if (!map) return new Map<string, boolean>()
@@ -464,16 +473,6 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     for (let i = 0; i < cellIdx && i + 1 < route.pathIds.length; i++) {
       m.set(`e_${route.pathIds[i]}_${route.pathIds[i + 1]}`, route.color)
     }
-    return m
-  }, [traceRunning, traceRoutes, traceStep])
-
-  const tracedCells = useMemo((): Map<string, string> => {
-    if (!traceRunning || traceRoutes.length === 0) return new Map()
-    const m = new Map<string, string>()
-    const { routeIdx, cellIdx } = traceStep
-    const route = traceRoutes[routeIdx]
-    if (!route || cellIdx >= route.pathIds.length) return m
-    m.set(route.pathIds[cellIdx], route.color)
     return m
   }, [traceRunning, traceRoutes, traceStep])
 
@@ -598,7 +597,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       queuePaint(cellId!, activeNodeType)
     } else if (tool === 'erase') {
       if (!paintStrokedRef.current) { snapshotNow(); paintStrokedRef.current = true }
-      if (coord) queuePaint(cellId!, 'blocked')
+      if (coord) queueErase(cellId!)
       const edgeId = hitTestEdge(wp.x, wp.y, map.edges, cellMap, getCenterById)
       if (edgeId) removeEdge(edgeId)
     } else if (tool === 'path' && coord) {
@@ -613,7 +612,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
         setCellTypeBatch(cellIds.map(id => ({ id, nodeType: activeNodeType })))
       }
     }
-  }, [map, tool, activeNodeType, worldPos, snapshotNow, queuePaint, removeEdge, cellMap, getCenterById,
+  }, [map, tool, activeNodeType, worldPos, snapshotNow, queuePaint, queueErase, removeEdge, cellMap, getCenterById,
     selectEdge, setSelectedCellId, setPathPoint, clearSelection, setCellTypeBatch])
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -670,10 +669,13 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       }
     }
 
-    if ((tool === 'type' || tool === 'erase') && e.evt.buttons === 1 && coord) {
-      queuePaint(`r${coord.row}c${coord.col}`, tool === 'erase' ? 'blocked' : activeNodeType)
+    if (tool === 'type' && e.evt.buttons === 1 && coord) {
+      queuePaint(`r${coord.row}c${coord.col}`, activeNodeType)
     }
-  }, [map, tool, activeNodeType, drawStart, worldPos, applyTransform, setPan, cellCenters, addEdge, queuePaint])
+    if (tool === 'erase' && e.evt.buttons === 1 && coord) {
+      queueErase(`r${coord.row}c${coord.col}`)
+    }
+  }, [map, tool, activeNodeType, drawStart, worldPos, applyTransform, setPan, cellCenters, addEdge, queuePaint, queueErase])
 
   const handleMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     isPanning.current = false
@@ -737,6 +739,14 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const hoverCenter = hoverCellId ? cellCenters.get(hoverCellId) : null
   const shape = map.config.cellShape
 
+  // Trace: current route's start and end cells for persistent highlighting
+  const activeRoute = traceRunning ? traceRoutes[traceStep.routeIdx] : null
+  const traceStartCenter = activeRoute ? cellCenters.get(activeRoute.pathIds[0]) : null
+  const traceEndCenter = activeRoute ? cellCenters.get(activeRoute.pathIds[activeRoute.pathIds.length - 1]) : null
+  const traceCurCenter = activeRoute && traceStep.cellIdx < activeRoute.pathIds.length
+    ? cellCenters.get(activeRoute.pathIds[traceStep.cellIdx])
+    : null
+
   return (
     <Stage
       ref={stageRef}
@@ -768,6 +778,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
             cellBg={bgTheme.cell}
             cellStroke={bgTheme.stroke}
             isDark={isDark}
+            showCellLabels={showCellLabels}
           />
         </Group>
       </Layer>
@@ -866,23 +877,29 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
             return <Circle key="pe" x={c.x} y={c.y} radius={7} fill="#ef4444" stroke="#fff" strokeWidth={1.5} />
           })()}
 
-          {traceRunning && (() => {
-            const { routeIdx, cellIdx } = traceStep
-            const route = traceRoutes[routeIdx]
-            if (!route || cellIdx >= route.pathIds.length) return null
-            const c = cellCenters.get(route.pathIds[cellIdx])
-            if (!c) return null
-            return (
-              <>
-                <Circle x={c.x} y={c.y} radius={10}
-                  fill={route.color} opacity={0.3}
-                  shadowColor={route.color} shadowBlur={20} shadowOpacity={1} />
-                <Circle x={c.x} y={c.y} radius={5}
-                  fill={route.color} stroke="#fff" strokeWidth={1.5}
-                  shadowColor={route.color} shadowBlur={10} shadowOpacity={1} />
-              </>
-            )
-          })()}
+          {/* Trace: persistent start/end markers + animated cursor */}
+          {traceRunning && activeRoute && (
+            <>
+              {traceStartCenter && (
+                <Circle x={traceStartCenter.x} y={traceStartCenter.y} radius={7}
+                  fill={activeRoute.color} stroke="#fff" strokeWidth={1.5} opacity={0.85} />
+              )}
+              {traceEndCenter && traceEndCenter !== traceStartCenter && (
+                <Circle x={traceEndCenter.x} y={traceEndCenter.y} radius={7}
+                  fill="transparent" stroke={activeRoute.color} strokeWidth={2.5} opacity={0.85} />
+              )}
+              {traceCurCenter && (
+                <>
+                  <Circle x={traceCurCenter.x} y={traceCurCenter.y} radius={10}
+                    fill={activeRoute.color} opacity={0.3}
+                    shadowColor={activeRoute.color} shadowBlur={20} shadowOpacity={1} />
+                  <Circle x={traceCurCenter.x} y={traceCurCenter.y} radius={5}
+                    fill={activeRoute.color} stroke="#fff" strokeWidth={1.5}
+                    shadowColor={activeRoute.color} shadowBlur={10} shadowOpacity={1} />
+                </>
+              )}
+            </>
+          )}
         </Group>
       </Layer>
     </Stage>

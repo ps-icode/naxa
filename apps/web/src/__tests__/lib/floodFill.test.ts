@@ -2,18 +2,14 @@ import { describe, it, expect } from 'vitest'
 import type { GridCell, GridConfig } from '@naxa/core'
 import { floodFill } from '../../lib/grid/floodFill'
 
-function cell(row: number, col: number, nodeType: GridCell['nodeType'] = 'blocked'): GridCell {
-  return { id: `r${row}c${col}`, coord: { row, col }, nodeType }
+// unassigned = default/empty cell (no nodeType assigned by user) — floodable
+function u(row: number, col: number): GridCell {
+  return { id: `r${row}c${col}`, coord: { row, col }, nodeType: 'blocked', assigned: false }
 }
 
-function makeGrid(rows: number, cols: number, cellShape: GridConfig['cellShape'], types: GridCell['nodeType'][][]): GridCell[] {
-  const cells: GridCell[] = []
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      cells.push(cell(r, c, types[r][c]))
-    }
-  }
-  return cells
+// assigned = explicitly typed cell (any nodeType) — stops flood
+function a(row: number, col: number, nodeType: GridCell['nodeType'] = 'source'): GridCell {
+  return { id: `r${row}c${col}`, coord: { row, col }, nodeType, assigned: true }
 }
 
 const squareCfg = (rows: number, cols: number): GridConfig =>
@@ -25,131 +21,157 @@ const hexCfg = (rows: number, cols: number): GridConfig =>
 const rectCfg = (rows: number, cols: number): GridConfig =>
   ({ rows, cols, cellShape: 'rectangle', cellSizeMeters: 1 })
 
-// ── basic square grid ──────────────────────────────────────────────────────────
+// ── square grid — basic flooding through unassigned cells ────────────────────
 
 describe('floodFill — square grid', () => {
-  it('returns just the start cell when surrounded by different types', () => {
-    const cfg = squareCfg(3, 3)
-    const cells = makeGrid(3, 3, 'square', [
-      ['lane',    'blocked', 'blocked'],
-      ['blocked', 'blocked', 'blocked'],
-      ['blocked', 'blocked', 'blocked'],
-    ])
-    expect(floodFill(0, 0, cells, cfg)).toEqual(['r0c0'])
-  })
-
-  it('fills entire grid when all cells share the same type', () => {
+  it('fills entire grid of unassigned cells from any start', () => {
     const cfg = squareCfg(2, 2)
-    const cells = makeGrid(2, 2, 'square', [
-      ['blocked', 'blocked'],
-      ['blocked', 'blocked'],
-    ])
+    const cells = [u(0,0), u(0,1), u(1,0), u(1,1)]
     const result = floodFill(0, 0, cells, cfg)
     expect(result.sort()).toEqual(['r0c0', 'r0c1', 'r1c0', 'r1c1'].sort())
   })
 
-  it('fills only the contiguous region matching start type', () => {
+  it('stops at assigned cell boundaries', () => {
     const cfg = squareCfg(3, 3)
-    const cells = makeGrid(3, 3, 'square', [
-      ['blocked', 'blocked', 'lane'],
-      ['blocked', 'lane',    'lane'],
-      ['lane',    'lane',    'lane'],
-    ])
-    // Start at (0,0) blocked — only (0,0) and (0,1) and (1,0) are contiguous blocked
+    // (0,0),(0,1),(1,0) are unassigned; rest are assigned
+    const cells = [
+      u(0,0), u(0,1), a(0,2),
+      u(1,0), a(1,1), a(1,2),
+      a(2,0), a(2,1), a(2,2),
+    ]
     const result = floodFill(0, 0, cells, cfg)
     expect(result.sort()).toEqual(['r0c0', 'r0c1', 'r1c0'].sort())
   })
 
-  it('uses 4-connectivity (does not fill diagonal-only neighbors)', () => {
+  it('returns [] when start cell is assigned', () => {
     const cfg = squareCfg(3, 3)
-    // blocked at corners (0,0) and (2,2), connected only diagonally
-    const cells = makeGrid(3, 3, 'square', [
-      ['blocked', 'lane',    'lane'],
-      ['lane',    'lane',    'lane'],
-      ['lane',    'lane',    'blocked'],
-    ])
-    const result = floodFill(0, 0, cells, cfg)
-    expect(result).toEqual(['r0c0'])  // (2,2) is NOT reached via diagonal
+    const cells = [
+      u(0,0), u(0,1), u(0,2),
+      u(1,0), a(1,1), u(1,2),
+      u(2,0), u(2,1), u(2,2),
+    ]
+    expect(floodFill(1, 1, cells, cfg)).toEqual([])
   })
 
-  it('returns empty array for invalid start coordinates', () => {
+  it('returns [] for out-of-bounds start coordinates', () => {
     const cfg = squareCfg(2, 2)
-    const cells = makeGrid(2, 2, 'square', [
-      ['blocked', 'blocked'],
-      ['blocked', 'blocked'],
-    ])
+    const cells = [u(0,0), u(0,1), u(1,0), u(1,1)]
     expect(floodFill(5, 5, cells, cfg)).toEqual([])
   })
 
-  it('works for rectangle cellShape', () => {
-    const cfg = rectCfg(2, 3)
-    const cells = makeGrid(2, 3, 'rectangle', [
-      ['lane', 'lane', 'blocked'],
-      ['lane', 'blocked', 'blocked'],
-    ])
+  it('uses 4-connectivity (does not flood through diagonal-only gap)', () => {
+    const cfg = squareCfg(3, 3)
+    // (0,0) and (2,2) both unassigned but only connected diagonally
+    const cells = [
+      u(0,0), a(0,1), a(0,2),
+      a(1,0), a(1,1), a(1,2),
+      a(2,0), a(2,1), u(2,2),
+    ]
     const result = floodFill(0, 0, cells, cfg)
-    expect(result.sort()).toEqual(['r0c0', 'r0c1', 'r1c0'].sort())
-  })
-})
-
-// ── hexagon grid ───────────────────────────────────────────────────────────────
-
-describe('floodFill — hexagon grid', () => {
-  it('uses 6-connectivity for even rows', () => {
-    // Row 0 (even): neighbors of (0,0) are NE=(-1,0), E=(0,1), SE=(1,0), SW=(1,-1), W=(0,-1), NW=(-1,-1)
-    // Only in-bounds: E=(0,1) and SE=(1,0)
-    const cfg = hexCfg(3, 3)
-    const cells = makeGrid(3, 3, 'hexagon', [
-      ['blocked', 'blocked', 'lane'],
-      ['blocked', 'lane',    'lane'],
-      ['lane',    'lane',    'lane'],
-    ])
-    // (0,0) blocked → neighbors E=(0,1) blocked, SE=(1,0) blocked
-    // (0,1) blocked → NE=(-1,1) OOB, E=(0,2)=lane, SE=(1,1)=lane, SW=(1,0), W=(0,0), NW=(-1,0) OOB
-    // (1,0) blocked → NE=(-1+1,0+1)=(0,1), E=(1,1)=lane, SE=(2,1)=lane, SW=(2,0)=lane, W=(1,-1) OOB, NW=(0,0)
-    // So fill: r0c0, r0c1, r1c0
-    const result = floodFill(0, 0, cells, cfg)
-    expect(result.sort()).toEqual(['r0c0', 'r0c1', 'r1c0'].sort())
+    expect(result).toEqual(['r0c0'])
   })
 
-  it('uses correct offsets for odd rows', () => {
-    // Row 1 (odd): neighbors of (1,0) are NE=(-1+1,0+1)=(0,1), E=(1,1), SE=(2,1), SW=(2,0), W=(1,-1) OOB, NW=(0,0)
-    const cfg = hexCfg(3, 3)
-    const all_blocked = makeGrid(3, 3, 'hexagon', [
-      ['blocked', 'blocked', 'blocked'],
-      ['blocked', 'blocked', 'blocked'],
-      ['blocked', 'blocked', 'blocked'],
-    ])
-    const result = floodFill(1, 0, all_blocked, cfg)
-    expect(result.length).toBe(9)  // all 9 cells connected
-  })
-
-  it('does not cross to cells of different type via hex neighbor', () => {
-    const cfg = hexCfg(2, 2)
-    const cells = makeGrid(2, 2, 'hexagon', [
-      ['blocked', 'lane'],
-      ['lane',    'lane'],
-    ])
-    expect(floodFill(0, 0, cells, cfg)).toEqual(['r0c0'])
-  })
-})
-
-// ── single cell ───────────────────────────────────────────────────────────────
-
-describe('floodFill — edge cases', () => {
-  it('1×1 grid returns the single cell', () => {
+  it('isolated unassigned cell returns just itself', () => {
     const cfg = squareCfg(1, 1)
-    const cells = [cell(0, 0, 'source')]
+    const cells = [u(0,0)]
     expect(floodFill(0, 0, cells, cfg)).toEqual(['r0c0'])
   })
 
-  it('start cell is of unique type surrounded by different cells', () => {
+  it('unassigned cell surrounded by assigned cells returns just itself', () => {
+    const cfg = squareCfg(3, 3)
+    const cells = [
+      a(0,0), a(0,1), a(0,2),
+      a(1,0), u(1,1), a(1,2),
+      a(2,0), a(2,1), a(2,2),
+    ]
+    expect(floodFill(1, 1, cells, cfg)).toEqual(['r1c1'])
+  })
+
+  it('works for rectangle cellShape (same 4-connectivity)', () => {
+    const cfg = rectCfg(2, 3)
+    const cells = [
+      u(0,0), u(0,1), a(0,2),
+      u(1,0), a(1,1), a(1,2),
+    ]
+    const result = floodFill(0, 0, cells, cfg)
+    expect(result.sort()).toEqual(['r0c0', 'r0c1', 'r1c0'].sort())
+  })
+
+  it('explicitly-blocked assigned cells act as walls', () => {
     const cfg = squareCfg(3, 1)
     const cells = [
-      cell(0, 0, 'blocked'),
-      cell(1, 0, 'source'),
-      cell(2, 0, 'blocked'),
+      u(0,0),
+      a(1,0, 'blocked'),
+      u(2,0),
     ]
-    expect(floodFill(1, 0, cells, cfg)).toEqual(['r1c0'])
+    // Flood from (0,0) — (1,0) has assigned=true so it blocks
+    expect(floodFill(0, 0, cells, cfg)).toEqual(['r0c0'])
+  })
+})
+
+// ── hexagon grid ─────────────────────────────────────────────────────────────
+
+describe('floodFill — hexagon grid', () => {
+  it('floods all unassigned in 6-connected even row', () => {
+    // Row 0 (even): in-bounds hex neighbors of (0,0) are E=(0,1) and SE=(1,0)
+    const cfg = hexCfg(3, 3)
+    const cells = [
+      u(0,0), u(0,1), a(0,2),
+      u(1,0), a(1,1), a(1,2),
+      a(2,0), a(2,1), a(2,2),
+    ]
+    const result = floodFill(0, 0, cells, cfg)
+    expect(result.sort()).toEqual(['r0c0', 'r0c1', 'r1c0'].sort())
+  })
+
+  it('floods all 9 cells when entire hex grid is unassigned', () => {
+    const cfg = hexCfg(3, 3)
+    const cells = [
+      u(0,0), u(0,1), u(0,2),
+      u(1,0), u(1,1), u(1,2),
+      u(2,0), u(2,1), u(2,2),
+    ]
+    const result = floodFill(1, 0, cells, cfg)
+    expect(result.length).toBe(9)
+  })
+
+  it('stops at assigned cells using hex connectivity', () => {
+    const cfg = hexCfg(2, 2)
+    const cells = [
+      u(0,0), a(0,1),
+      a(1,0), a(1,1),
+    ]
+    expect(floodFill(0, 0, cells, cfg)).toEqual(['r0c0'])
+  })
+
+  it('returns [] when start cell is assigned in hex grid', () => {
+    const cfg = hexCfg(2, 2)
+    const cells = [a(0,0), u(0,1), u(1,0), u(1,1)]
+    expect(floodFill(0, 0, cells, cfg)).toEqual([])
+  })
+})
+
+// ── edge cases ────────────────────────────────────────────────────────────────
+
+describe('floodFill — edge cases', () => {
+  it('1×1 grid with unassigned cell returns that cell', () => {
+    const cfg = squareCfg(1, 1)
+    expect(floodFill(0, 0, [u(0,0)], cfg)).toEqual(['r0c0'])
+  })
+
+  it('1×1 grid with assigned cell returns []', () => {
+    const cfg = squareCfg(1, 1)
+    expect(floodFill(0, 0, [a(0,0)], cfg)).toEqual([])
+  })
+
+  it('cells without assigned field (undefined) are treated as unassigned', () => {
+    const cfg = squareCfg(2, 1)
+    // No assigned field — backwards compat: treated as unassigned
+    const cells: GridCell[] = [
+      { id: 'r0c0', coord: { row: 0, col: 0 }, nodeType: 'blocked' },
+      { id: 'r1c0', coord: { row: 1, col: 0 }, nodeType: 'blocked' },
+    ]
+    const result = floodFill(0, 0, cells, cfg)
+    expect(result.sort()).toEqual(['r0c0', 'r1c0'].sort())
   })
 })

@@ -24,9 +24,16 @@ function getNeighborCoords(row: number, col: number, config: GridConfig): Array<
   return result
 }
 
-// Returns the IDs of all cells contiguous with the start cell that share its nodeType.
-// Uses 4-connectivity for square/rectangle grids, 6-connectivity for hexagon grids.
-// Returns [] if startRow/startCol is out of the cells list.
+/**
+ * Returns the IDs of all cells contiguous with the start cell that are unassigned
+ * (cell.assigned === false or absent — the default/empty state).
+ *
+ * If the start cell itself is assigned (explicitly typed by the user), returns [].
+ * Flood stops at any cell boundary where cell.assigned is truthy.
+ *
+ * Uses 4-connectivity for square/rectangle grids, 6-connectivity for hexagon grids.
+ * Returns [] if startRow/startCol is out of bounds.
+ */
 export function floodFill(
   startRow: number,
   startCol: number,
@@ -37,7 +44,9 @@ export function floodFill(
   const start = byCoord.get(`${startRow},${startCol}`)
   if (!start) return []
 
-  const targetType = start.nodeType
+  // Only flood if start cell is unassigned
+  if (start.assigned) return []
+
   const visited = new Set<string>()
   const queue: Array<[number, number]> = [[startRow, startCol]]
   const result: string[] = []
@@ -49,7 +58,7 @@ export function floodFill(
     visited.add(key)
 
     const cell = byCoord.get(key)
-    if (!cell || cell.nodeType !== targetType) continue
+    if (!cell || cell.assigned) continue   // stop at assigned cell boundary
 
     result.push(cell.id)
     for (const [nr, nc] of getNeighborCoords(row, col, config)) {

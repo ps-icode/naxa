@@ -18,13 +18,14 @@ const TOOLS: { id: Tool; label: string; key: string; tip: string }[] = [
 ]
 
 export default function Toolbar() {
-  const { map, past, future, undo, redo, setSavedList, loadMap } = useGridStore()
+  const { map, past, future, undo, redo, setSavedList, loadMap, resetCells } = useGridStore()
   const {
     tool, setTool, showToast,
     setValidationResult, clearPath,
     traceRunning, traceSpeed, traceRoutes,
     setTraceRoutes, setTraceRunning, setTraceSpeed,
     showCellCoords, toggleCellCoords,
+    showCellLabels, toggleCellLabels,
     mapBg, toggleMapBg,
     activeNodeType, selection,
     setShowExportModal,
@@ -232,6 +233,18 @@ export default function Toolbar() {
         Coords
       </button>
       <button
+        onClick={toggleCellLabels}
+        disabled={!map}
+        title="Toggle cell type labels (P, S, D, …) on canvas"
+        style={{
+          ...actionBtn(showCellLabels ? '#164e63' : null, pt),
+          border: showCellLabels ? '1px solid #22d3ee' : `1px solid ${pt.border}`,
+          color: showCellLabels ? '#67e8f9' : pt.textPrimary,
+        }}
+      >
+        Labels
+      </button>
+      <button
         onClick={toggleMapBg}
         disabled={!map}
         title="Toggle canvas background between dark and light"
@@ -242,6 +255,25 @@ export default function Toolbar() {
         }}
       >
         {mapBg === 'light' ? '☀ Light' : '☾ Dark'}
+      </button>
+      <Sep pt={pt} />
+      <button
+        onClick={() => {
+          if (!map) return
+          if (window.confirm('Reset all cells and lanes? This cannot be undone beyond undo history.')) {
+            resetCells()
+            showToast('Map reset ✓')
+          }
+        }}
+        disabled={!map}
+        title="Reset all cells to default and clear all lanes"
+        style={{
+          ...actionBtn('#7f1d1d', pt),
+          border: '1px solid #ef4444',
+          color: '#fca5a5',
+        }}
+      >
+        ↺ Reset
       </button>
       <button onClick={handleSave} disabled={!map} style={actionBtn('#1e40af', pt)}>Save</button>
     </div>

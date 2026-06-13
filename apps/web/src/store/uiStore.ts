@@ -50,6 +50,8 @@ interface UIStore {
   setTraceSpeed: (v: number) => void
   showCellCoords: boolean
   toggleCellCoords: () => void
+  showCellLabels: boolean
+  toggleCellLabels: () => void
   mapBg: 'dark' | 'light'
   toggleMapBg: () => void
   fitRequested: number
@@ -76,6 +78,7 @@ export const useUIStore = create<UIStore>((set) => ({
   traceRunning: false,
   traceSpeed: 3,
   showCellCoords: false,
+  showCellLabels: true,
   mapBg: 'dark',
   selection: new Set<string>(),
 
@@ -113,6 +116,7 @@ export const useUIStore = create<UIStore>((set) => ({
   setTraceRunning: (traceRunning) => set({ traceRunning }),
   setTraceSpeed: (traceSpeed) => set({ traceSpeed }),
   toggleCellCoords: () => set(s => ({ showCellCoords: !s.showCellCoords })),
+  toggleCellLabels: () => set(s => ({ showCellLabels: !s.showCellLabels })),
   toggleMapBg: () => set(s => ({ mapBg: s.mapBg === 'dark' ? 'light' : 'dark' })),
   fitRequested: 0,
   requestFitToScreen: () => set(s => ({ fitRequested: s.fitRequested + 1 })),

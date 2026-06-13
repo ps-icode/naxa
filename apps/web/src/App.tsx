@@ -35,6 +35,10 @@ export default function App() {
 
   // Keyboard shortcuts
   const handleKey = useCallback((e: KeyboardEvent) => {
+    // Don't fire when typing in an input / textarea / contenteditable
+    const target = e.target as HTMLElement
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+
     const { setTool, clearPath } = useUIStore.getState()
     // Tool shortcuts
     if (!e.ctrlKey && !e.metaKey) {

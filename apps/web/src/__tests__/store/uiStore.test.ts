@@ -23,6 +23,7 @@ function freshStore(): void {
     traceRunning: false,
     traceSpeed: 3,
     showCellCoords: false,
+    showCellLabels: true,
     mapBg: 'dark',
     fitRequested: 0,
     selection: new Set(),
@@ -144,6 +145,15 @@ describe('setShowNewMapModal', () => {
   })
 })
 
+describe('setShowExportModal', () => {
+  it('sets showExportModal', () => {
+    useUIStore.getState().setShowExportModal(true)
+    expect(useUIStore.getState().showExportModal).toBe(true)
+    useUIStore.getState().setShowExportModal(false)
+    expect(useUIStore.getState().showExportModal).toBe(false)
+  })
+})
+
 describe('setValidationResult', () => {
   const fullResult: ValidationResult = {
     unreachable: ['c1'],
@@ -256,6 +266,19 @@ describe('toggleCellCoords', () => {
   })
 })
 
+describe('toggleCellLabels', () => {
+  it('toggleCellLabels: true → false', () => {
+    useUIStore.getState().toggleCellLabels()
+    expect(useUIStore.getState().showCellLabels).toBe(false)
+  })
+
+  it('toggleCellLabels: false → true', () => {
+    useUIStore.setState({ showCellLabels: false })
+    useUIStore.getState().toggleCellLabels()
+    expect(useUIStore.getState().showCellLabels).toBe(true)
+  })
+})
+
 describe('toggleMapBg', () => {
   it('toggleMapBg: dark → light', () => {
     useUIStore.getState().toggleMapBg()
@@ -266,6 +289,22 @@ describe('toggleMapBg', () => {
     useUIStore.setState({ mapBg: 'light' })
     useUIStore.getState().toggleMapBg()
     expect(useUIStore.getState().mapBg).toBe('dark')
+  })
+})
+
+// ── setSelection / clearSelection ─────────────────────────────────────────────
+
+describe('setSelection / clearSelection', () => {
+  it('setSelection stores a Set of cell ids', () => {
+    const ids = new Set(['r0c0', 'r0c1'])
+    useUIStore.getState().setSelection(ids)
+    expect(useUIStore.getState().selection).toEqual(ids)
+  })
+
+  it('clearSelection empties the selection set', () => {
+    useUIStore.getState().setSelection(new Set(['r0c0']))
+    useUIStore.getState().clearSelection()
+    expect(useUIStore.getState().selection.size).toBe(0)
   })
 })
 

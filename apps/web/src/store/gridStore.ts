@@ -10,10 +10,19 @@ function initCells(config: GridConfig): GridCell[] {
   const cells: GridCell[] = []
   for (let row = 0; row < config.rows; row++) {
     for (let col = 0; col < config.cols; col++) {
-      cells.push({ id: makeCellId(row, col), coord: { row, col }, nodeType: 'blocked' })
+      cells.push({ id: makeCellId(row, col), coord: { row, col }, nodeType: 'blocked', assigned: false })
     }
   }
   return cells
+}
+
+// Normalise cells loaded from disk/API: cells without 'assigned' field were created before
+// v0.20 — treat any non-blocked cell as assigned for backwards compat.
+function normaliseCells(cells: GridCell[]): GridCell[] {
+  return cells.map(c => ({
+    ...c,
+    assigned: c.assigned ?? (c.nodeType !== 'blocked'),
+  }))
 }
 
 // Caps history at 50 entries (slice(-49) + new = 50 max).
@@ -40,6 +49,7 @@ interface GridStore {
 
   setCellType: (cellId: string, nodeType: NodeType) => void
   setCellTypeBatch: (updates: Array<{ id: string; nodeType: NodeType }>) => void
+  clearCellBatch: (ids: string[]) => void
   setCellSubtype: (cellId: string, subtype: string | undefined) => void
   setCellLabel: (cellId: string, label: string | undefined) => void
   snapshotNow: () => void
@@ -77,7 +87,7 @@ export const useGridStore = create<GridStore>((set, _get) => ({
       future: [],
     }),
 
-  loadMap: (map) => set({ map, past: [], future: [] }),
+  loadMap: (map) => set({ map: { ...map, cells: normaliseCells(map.cells) }, past: [], future: [] }),
   clearMap: () => set({ map: null, past: [], future: [] }),
   updateMapName: (name) => set((s) => (s.map ? { map: { ...s.map, name } } : {})),
   setSavedList: (savedList) => set({ savedList }),
@@ -95,7 +105,7 @@ export const useGridStore = create<GridStore>((set, _get) => ({
         map: {
           ...s.map,
           updatedAt: new Date().toISOString(),
-          cells: s.map.cells.map(c => c.id === id ? { ...c, nodeType, subtype: undefined } : c),
+          cells: s.map.cells.map(c => c.id === id ? { ...c, nodeType, assigned: true, subtype: undefined, label: undefined } : c),
         },
       }
     }),
@@ -112,8 +122,27 @@ export const useGridStore = create<GridStore>((set, _get) => ({
           updatedAt: new Date().toISOString(),
           cells: s.map.cells.map(c => {
             const nt = paintMap.get(c.id)
-            return nt !== undefined ? { ...c, nodeType: nt, subtype: undefined } : c
+            return nt !== undefined ? { ...c, nodeType: nt, assigned: true, subtype: undefined } : c
           }),
+        },
+      }
+    }),
+
+  // Resets cells to the unassigned/default state — used by the erase tool.
+  // No snapshot — caller must call snapshotNow() at stroke start.
+  clearCellBatch: (ids) =>
+    set((s) => {
+      if (!s.map || ids.length === 0) return {}
+      const idSet = new Set(ids)
+      return {
+        map: {
+          ...s.map,
+          updatedAt: new Date().toISOString(),
+          cells: s.map.cells.map(c =>
+            idSet.has(c.id)
+              ? { ...c, nodeType: 'blocked' as NodeType, assigned: false, subtype: undefined, label: undefined }
+              : c
+          ),
         },
       }
     }),
@@ -191,7 +220,7 @@ export const useGridStore = create<GridStore>((set, _get) => ({
         map: {
           ...s.map,
           updatedAt: new Date().toISOString(),
-          cells: s.map.cells.map(c => ({ ...c, nodeType: 'blocked' as NodeType, subtype: undefined, label: undefined })),
+          cells: s.map.cells.map(c => ({ ...c, nodeType: 'blocked' as NodeType, assigned: false, subtype: undefined, label: undefined })),
           edges: [],
         },
       }

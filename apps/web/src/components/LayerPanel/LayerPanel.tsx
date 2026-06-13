@@ -147,7 +147,7 @@ export default function LayerPanel() {
       </div>
 
       {/* Cell info panel */}
-      {selectedCell && (selectedCell.nodeType !== 'blocked' || !!selectedCell.subtype) && (
+      {selectedCell && !!selectedCell.assigned && (
         <CellInfoPanel
           key={selectedCellId}
           cell={selectedCell}
@@ -160,7 +160,7 @@ export default function LayerPanel() {
       {/* Stats */}
       <div style={{ marginBottom: 14, flexShrink: 0 }}>
         <SectionLabel pt={pt}>Stats</SectionLabel>
-        <StatRow label="Typed cells" value={map.cells.filter(c => c.nodeType !== 'blocked' || !!c.subtype).length} pt={pt} />
+        <StatRow label="Typed cells" value={map.cells.filter(c => !!c.assigned).length} pt={pt} />
         <StatRow label="Lanes" value={map.edges.length} pt={pt} />
         <StatRow label="Scale" value={`${map.config.cellSizeMeters}m/cell`} pt={pt} />
         <StatRow label="Area" value={`${(map.config.rows * map.config.cols * map.config.cellSizeMeters ** 2).toFixed(1)} m²`} pt={pt} />

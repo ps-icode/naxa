@@ -40,6 +40,7 @@ export interface GridCell {
   id: string
   coord: CellCoord
   nodeType: NodeType
+  assigned?: boolean // true = explicitly typed by the user; false/absent = default/untyped cell
   subtype?: string   // e.g. 'feeder', 'bin_1', 'fast_charge', or any custom name
   label?: string     // free-form display label (shown inside the cell)
   metadata?: Record<string, unknown>

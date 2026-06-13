@@ -92,15 +92,15 @@ export default function MapSetupModal() {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <Field label="Rows">
             <input
-              type="number" min={3} max={50} value={rows}
-              onChange={e => setRows(Math.min(50, Math.max(3, +e.target.value)))}
+              type="number" min={3} max={1000} value={rows}
+              onChange={e => setRows(Math.min(1000, Math.max(3, +e.target.value)))}
               style={{ ...inputStyle, width: '100%' }}
             />
           </Field>
           <Field label="Columns">
             <input
-              type="number" min={3} max={80} value={cols}
-              onChange={e => setCols(Math.min(80, Math.max(3, +e.target.value)))}
+              type="number" min={3} max={1000} value={cols}
+              onChange={e => setCols(Math.min(1000, Math.max(3, +e.target.value)))}
               style={{ ...inputStyle, width: '100%' }}
             />
           </Field>
@@ -125,6 +125,11 @@ export default function MapSetupModal() {
         <div style={{ background: '#0a0f1e', borderRadius: 6, padding: '10px 12px', marginBottom: 20, fontSize: 12, color: '#475569' }}>
           Grid: <strong style={{ color: '#94a3b8' }}>{rows * cols}</strong> cells ·{' '}
           Real size: <strong style={{ color: '#94a3b8' }}>{realH.toFixed(1)} m × {realW.toFixed(1)} m</strong>
+          {rows * cols > 10000 && (
+            <div style={{ marginTop: 6, color: '#f59e0b' }}>
+              ⚠ Large grid ({rows * cols} cells) — canvas may be slower to render
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

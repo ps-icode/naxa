@@ -30,7 +30,7 @@ export const FIELD_PRESETS: Record<string, ExportFieldNames> = {
 export function buildExportPayload(map: GridMap, opts: ExportOptions): Record<string, unknown> {
   const fn = opts.fieldNames
   const cells = map.cells
-    .filter(c => !opts.excludeDefaultBlocked || !(c.nodeType === 'blocked' && !c.subtype))
+    .filter(c => !opts.excludeDefaultBlocked || !!c.assigned)
     .map(c => {
       const out: Record<string, unknown> = {
         id: c.id,
@@ -61,7 +61,7 @@ export function buildExportPayload(map: GridMap, opts: ExportOptions): Record<st
   return payload
 }
 
-function needsYAMLQuotes(s: string): boolean {
+export function needsYAMLQuotes(s: string): boolean {
   if (s === '') return true
   if (/^(true|false|null|~|yes|no|on|off)$/i.test(s)) return true
   if (/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(s)) return true
@@ -69,7 +69,7 @@ function needsYAMLQuotes(s: string): boolean {
   return false
 }
 
-function toYAML(val: unknown, indent: number): string {
+export function toYAML(val: unknown, indent: number): string {
   const pad = '  '.repeat(indent)
   if (val === null || val === undefined) return 'null'
   if (typeof val === 'boolean') return val ? 'true' : 'false'
