@@ -2,7 +2,7 @@ import React, {
   useRef, useCallback, useState, useMemo, useEffect, memo,
 } from 'react'
 import {
-  Stage, Layer, Group, Rect, RegularPolygon, Arrow, Line, Circle, Text,
+  Stage, Layer, Group, Rect, RegularPolygon, Arrow, Text,
 } from 'react-konva'
 import type Konva from 'konva'
 import { useGridStore } from '../../store/gridStore'
@@ -15,6 +15,7 @@ import { hitTestEdge, bfsPath } from '../../lib/graph'
 import { floodFill } from '../../lib/grid/floodFill'
 import { NODE_TYPE_COLORS } from '@naxa/core'
 import type { GridCell, GridMap, Edge, CellCoord, NodeType } from '@naxa/core'
+import CanvasOverlay from './CanvasOverlay'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const EDGE_COLOR = '#93c5fd'
@@ -750,13 +751,12 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const hoverCenter = hoverCellId ? cellCenters.get(hoverCellId) : null
   const shape = map.config.cellShape
 
-  // Trace: current route's start and end cells for persistent highlighting
+  // Trace: compute centers for the current route's start, end, and animated cursor
   const activeRoute = traceRunning ? traceRoutes[traceStep.routeIdx] : null
   const traceStartCenter = activeRoute ? cellCenters.get(activeRoute.pathIds[0]) : null
-  const traceEndCenter = activeRoute ? cellCenters.get(activeRoute.pathIds[activeRoute.pathIds.length - 1]) : null
-  const traceCurCenter = activeRoute && traceStep.cellIdx < activeRoute.pathIds.length
-    ? cellCenters.get(activeRoute.pathIds[traceStep.cellIdx])
-    : null
+  const traceEndCenter   = activeRoute ? cellCenters.get(activeRoute.pathIds[activeRoute.pathIds.length - 1]) : null
+  const traceCurCenter   = activeRoute && traceStep.cellIdx < activeRoute.pathIds.length
+    ? cellCenters.get(activeRoute.pathIds[traceStep.cellIdx]) : null
 
   return (
     <Stage
@@ -828,89 +828,22 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
         <Group ref={overlayGroupRef}
           x={panRef.current.x} y={panRef.current.y}
           scaleX={zoomRef.current} scaleY={zoomRef.current}>
-
-          {hoverCenter && (
-            shape === 'hexagon'
-              ? <RegularPolygon
-                  x={hoverCenter.x} y={hoverCenter.y}
-                  sides={6} radius={HEX_RADIUS - 1}
-                  fill="transparent" stroke="#60a5fa" strokeWidth={2}
-                />
-              : <Rect
-                  x={hoverCenter.x - (shape === 'rectangle' ? RECT_W : SQUARE_SIZE) / 2 + 1}
-                  y={hoverCenter.y - (shape === 'rectangle' ? RECT_H : SQUARE_SIZE) / 2 + 1}
-                  width={(shape === 'rectangle' ? RECT_W : SQUARE_SIZE) - 2}
-                  height={(shape === 'rectangle' ? RECT_H : SQUARE_SIZE) - 2}
-                  cornerRadius={4}
-                  fill="transparent" stroke="#60a5fa" strokeWidth={2}
-                />
-          )}
-
-          <Line ref={previewLineRef} points={[0, 0, 0, 0]} visible={false}
-            stroke="#60a5fa" strokeWidth={2} dash={[6, 4]} opacity={0.7} />
-
-          <Rect
-            ref={selectionRectRef}
-            visible={false}
-            x={0} y={0} width={0} height={0}
-            fill="rgba(96,165,250,0.08)"
-            stroke="#60a5fa" strokeWidth={1}
-            dash={[6, 3]}
+          <CanvasOverlay
+            previewLineRef={previewLineRef}
+            selectionRectRef={selectionRectRef}
+            hoverCenter={hoverCenter}
+            shape={shape}
+            selection={selection}
+            cells={map.cells}
+            cellCenters={cellCenters}
+            pathStart={pathStart}
+            pathEnd={pathEnd}
+            traceActive={!!(traceRunning && activeRoute)}
+            traceColor={activeRoute?.color ?? ''}
+            traceStartCenter={traceStartCenter}
+            traceEndCenter={traceEndCenter}
+            traceCurCenter={traceCurCenter}
           />
-
-          {selection.size > 0 && map.cells.filter(c => selection.has(c.id)).map(c => {
-            const center = cellCenters.get(c.id)
-            if (!center) return null
-            const w = shape === 'rectangle' ? RECT_W : SQUARE_SIZE
-            const h = shape === 'rectangle' ? RECT_H : SQUARE_SIZE
-            return shape === 'hexagon'
-              ? <RegularPolygon key={`sel-${c.id}`}
-                  x={center.x} y={center.y}
-                  sides={6} radius={HEX_RADIUS - 1}
-                  fill="rgba(96,165,250,0.22)" stroke="#60a5fa" strokeWidth={1.5}
-                />
-              : <Rect key={`sel-${c.id}`}
-                  x={center.x - w / 2 + 1} y={center.y - h / 2 + 1}
-                  width={w - 2} height={h - 2}
-                  cornerRadius={shape === 'square' ? 4 : 2}
-                  fill="rgba(96,165,250,0.22)" stroke="#60a5fa" strokeWidth={1.5}
-                />
-          })}
-
-          {pathStart && (() => {
-            const c = cellCenters.get(pathStart)
-            if (!c) return null
-            return <Circle key="ps" x={c.x} y={c.y} radius={7} fill="#10b981" stroke="#fff" strokeWidth={1.5} />
-          })()}
-          {pathEnd && (() => {
-            const c = cellCenters.get(pathEnd)
-            if (!c) return null
-            return <Circle key="pe" x={c.x} y={c.y} radius={7} fill="#ef4444" stroke="#fff" strokeWidth={1.5} />
-          })()}
-
-          {/* Trace: persistent start/end markers + animated cursor */}
-          {traceRunning && activeRoute && (
-            <>
-              {traceStartCenter && (
-                <Circle x={traceStartCenter.x} y={traceStartCenter.y} radius={7}
-                  fill={activeRoute.color} stroke="#fff" strokeWidth={1.5} opacity={0.85} />
-              )}
-              {traceEndCenter && traceEndCenter !== traceStartCenter && (
-                <Circle x={traceEndCenter.x} y={traceEndCenter.y} radius={7}
-                  fill="transparent" stroke={activeRoute.color} strokeWidth={2.5} opacity={0.85} />
-              )}
-              {traceCurCenter && (
-                <>
-                  <Circle x={traceCurCenter.x} y={traceCurCenter.y} radius={10}
-                    fill={activeRoute.color} opacity={0.3}
-                    shadowColor={activeRoute.color} shadowBlur={20} shadowOpacity={1} />
-                  <Circle x={traceCurCenter.x} y={traceCurCenter.y} radius={5}
-                    fill={activeRoute.color} stroke="#fff" strokeWidth={1.5}
-                    shadowColor={activeRoute.color} shadowBlur={10} shadowOpacity={1} />
-                </>
-              )}
-            </>
-          )}
         </Group>
       </Layer>
     </Stage>
