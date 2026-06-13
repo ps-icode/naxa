@@ -21,6 +21,7 @@ interface UIStore {
   zoom: number
   pan: { x: number; y: number }
   showNewMapModal: boolean
+  showExportModal: boolean
   validationResult: ValidationResult | null
   toast: { message: string; type: 'success' | 'error' } | null
   // Trace animation
@@ -39,6 +40,7 @@ interface UIStore {
   setZoom: (z: number) => void
   setPan: (p: { x: number; y: number }) => void
   setShowNewMapModal: (v: boolean) => void
+  setShowExportModal: (v: boolean) => void
   setValidationResult: (r: ValidationResult | null) => void
   setPathResult: (p: string[] | null) => void
   showToast: (message: string, type?: 'success' | 'error') => void
@@ -67,6 +69,7 @@ export const useUIStore = create<UIStore>((set) => ({
   zoom: 1,
   pan: { x: 40, y: 40 },
   showNewMapModal: false,
+  showExportModal: false,
   validationResult: null,
   toast: null,
   traceRoutes: [],
@@ -95,6 +98,7 @@ export const useUIStore = create<UIStore>((set) => ({
   setZoom: (zoom) => set({ zoom }),
   setPan: (pan) => set({ pan }),
   setShowNewMapModal: (showNewMapModal) => set({ showNewMapModal }),
+  setShowExportModal: (showExportModal) => set({ showExportModal }),
   setValidationResult: (validationResult) => set({ validationResult }),
   setPathResult: (pathResult) => set({ pathResult }),
 

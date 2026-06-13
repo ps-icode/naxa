@@ -16,6 +16,7 @@ function freshStore(): void {
     zoom: 1,
     pan: { x: 40, y: 40 },
     showNewMapModal: false,
+    showExportModal: false,
     validationResult: null,
     toast: null,
     traceRoutes: [],

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useGridStore } from '../../store/gridStore'
 import { useUIStore } from '../../store/uiStore'
 import { validateConnectivity, buildTraceRoutes } from '../../lib/graph'
-import { exportJSON, exportPNG, exportCAD } from '../../lib/export'
+import { exportPNG, exportCAD } from '../../lib/export'
 import { api } from '../../lib/api'
 import { PANE_THEMES } from '../../lib/themes'
 import type { GridMap } from '@naxa/core'
@@ -27,6 +27,7 @@ export default function Toolbar() {
     showCellCoords, toggleCellCoords,
     mapBg, toggleMapBg,
     activeNodeType, selection,
+    setShowExportModal,
   } = useUIStore()
   const { clearSelection } = useUIStore.getState()
   const { snapshotNow, setCellTypeBatch } = useGridStore.getState()
@@ -215,7 +216,7 @@ export default function Toolbar() {
       <Sep pt={pt} />
 
       <button onClick={handleValidate} disabled={!map} style={actionBtn(null, pt)} title="Validate graph connectivity">Validate</button>
-      <button onClick={() => map && exportJSON(map)} disabled={!map} style={actionBtn(null, pt)} title="Export as JSON graph">JSON</button>
+      <button onClick={() => map && setShowExportModal(true)} disabled={!map} style={actionBtn(null, pt)} title="Export as JSON or YAML with custom field names and coordinate options">Export</button>
       <button onClick={() => map && exportPNG(map, mapBg)} disabled={!map} style={actionBtn(null, pt)} title="Export as PNG image">PNG</button>
       <button onClick={() => map && exportCAD(map, mapBg)} disabled={!map} style={actionBtn(null, pt)} title="Export CAD-style PNG with measurements and cell coordinates">CAD</button>
       <button

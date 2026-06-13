@@ -4,6 +4,7 @@ import GridCanvas from './components/Canvas/GridCanvas'
 import LayerPanel from './components/LayerPanel/LayerPanel'
 import Toolbar from './components/Toolbar/Toolbar'
 import MapSetupModal from './components/MapSetup/MapSetupModal'
+import ExportModal from './components/Export/ExportModal'
 import { useUIStore } from './store/uiStore'
 import { useGridStore } from './store/gridStore'
 import { PANE_THEMES } from './lib/themes'
@@ -14,7 +15,7 @@ const SIDEBAR = 220
 export default function App() {
   const stageRef = useRef<Konva.Stage>(null)
   const [size, setSize] = useState({ w: window.innerWidth - SIDEBAR, h: window.innerHeight - 44 })
-  const { showNewMapModal, toast, mapBg } = useUIStore()
+  const { showNewMapModal, showExportModal, toast, mapBg } = useUIStore()
   const { map, setSavedList, undo, redo } = useGridStore()
   const pt = PANE_THEMES[mapBg]
 
@@ -95,6 +96,7 @@ export default function App() {
 
       {/* Modals */}
       {showNewMapModal && <MapSetupModal />}
+      {showExportModal && <ExportModal />}
 
       {/* Toast */}
       {toast && (

@@ -261,3 +261,7 @@ export function exportJSON(map: GridMap): void {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+// ── Custom export (re-exported from exportData — no Konva dependency) ─────────
+export type { ExportFieldNames, ExportOptions } from './exportData'
+export { FIELD_PRESETS, buildExportPayload, downloadCustomExport } from './exportData'
