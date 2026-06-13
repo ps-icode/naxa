@@ -10,7 +10,7 @@ function initCells(config: GridConfig): GridCell[] {
   const cells: GridCell[] = []
   for (let row = 0; row < config.rows; row++) {
     for (let col = 0; col < config.cols; col++) {
-      cells.push({ id: makeCellId(row, col), coord: { row, col }, nodeType: 'lane' })
+      cells.push({ id: makeCellId(row, col), coord: { row, col }, nodeType: 'blocked' })
     }
   }
   return cells
@@ -191,7 +191,7 @@ export const useGridStore = create<GridStore>((set, _get) => ({
         map: {
           ...s.map,
           updatedAt: new Date().toISOString(),
-          cells: s.map.cells.map(c => ({ ...c, nodeType: 'lane' as NodeType, subtype: undefined, label: undefined })),
+          cells: s.map.cells.map(c => ({ ...c, nodeType: 'blocked' as NodeType, subtype: undefined, label: undefined })),
           edges: [],
         },
       }

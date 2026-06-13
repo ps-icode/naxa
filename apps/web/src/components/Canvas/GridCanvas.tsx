@@ -12,8 +12,9 @@ import {
   HEX_RADIUS, SQUARE_SIZE, RECT_W, RECT_H,
 } from '../../lib/grid/geometry'
 import { hitTestEdge, bfsPath } from '../../lib/graph'
+import { floodFill } from '../../lib/grid/floodFill'
 import { NODE_TYPE_COLORS } from '@naxa/core'
-import type { GridCell, GridMap, Edge, CellCoord } from '@naxa/core'
+import type { GridCell, GridMap, Edge, CellCoord, NodeType } from '@naxa/core'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const EDGE_COLOR = '#60a5fa'
@@ -22,8 +23,8 @@ const SELECT_GLOW = '#a78bfa'
 
 // Background themes: dark (default) and light
 export const BG_THEMES = {
-  dark:  { canvas: '#080818', cell: '#0d1424', stroke: '#1e293b', dot: '#ffffff', coordText: '#94a3b8' },
-  light: { canvas: '#f1f5f9', cell: '#e2e8f0', stroke: '#94a3b8', dot: '#334155', coordText: '#475569' },
+  dark:  { canvas: '#080818', cell: '#0d1424', stroke: '#1e293b', dot: '#ffffff', coordText: '#94a3b8', blockedBg: '#06091a' },
+  light: { canvas: '#f1f5f9', cell: '#e2e8f0', stroke: '#94a3b8', dot: '#334155', coordText: '#475569', blockedBg: '#c8cdd8' },
 } as const
 
 const NODE_ICONS: Record<string, string> = {
@@ -42,36 +43,41 @@ interface CellItemProps {
   unreachable: boolean
   cellBg: string
   cellStroke: string
+  blockedBg: string
 }
 
 const CellItem = memo(function CellItem({
   cell, config, isPathNode, isPathStart, isPathEnd, isSelected, layerVisible, unreachable,
-  cellBg, cellStroke,
+  cellBg, cellStroke, blockedBg,
 }: CellItemProps) {
   const center = getCellCenter(cell.coord, config)
   const shape = config.cellShape
-  const typed = cell.nodeType !== 'lane'
+
+  // Default blocked: 'blocked' type with no subtype — the implicit floor state.
+  // Explicit typed: any other type, or 'blocked' with a subtype (wall, pillar, etc.)
+  const isDefaultBlocked = cell.nodeType === 'blocked' && !cell.subtype
 
   const fill = isPathStart || isPathEnd ? '#d97706'
     : isPathNode ? '#78350f'
-    : typed ? NODE_TYPE_COLORS[cell.nodeType]
-    : cellBg
+    : isDefaultBlocked ? blockedBg
+    : NODE_TYPE_COLORS[cell.nodeType]
 
   const borderColor = unreachable ? '#ef4444'
     : isSelected ? '#a78bfa'
-    : typed ? NODE_TYPE_COLORS[cell.nodeType]
-    : cellStroke
+    : isDefaultBlocked ? cellStroke
+    : NODE_TYPE_COLORS[cell.nodeType]
 
-  const borderW = typed || isSelected || unreachable ? 2 : 1
-  const opacity = layerVisible ? (typed ? 0.8 : 1) : 0.1
+  const borderW = isDefaultBlocked && !isSelected && !unreachable ? 1 : 2
+  const opacity = layerVisible ? (isDefaultBlocked ? 1 : 0.8) : 0.1
 
-  const displayText = cell.label ?? cell.subtype?.replace(/_/g, ' ') ?? (typed ? NODE_ICONS[cell.nodeType] : undefined)
+  // NODE_ICONS has no 'lane' entry — lane cells show no icon (pure corridor)
+  const displayText = cell.label ?? cell.subtype?.replace(/_/g, ' ') ?? (isDefaultBlocked ? undefined : NODE_ICONS[cell.nodeType])
 
   const shadowProps = isSelected
     ? { shadowColor: '#a78bfa', shadowBlur: 14, shadowOpacity: 0.9 }
     : unreachable
       ? { shadowColor: '#ef4444', shadowBlur: 10, shadowOpacity: 0.8 }
-      : typed
+      : !isDefaultBlocked
         ? { shadowColor: NODE_TYPE_COLORS[cell.nodeType], shadowBlur: 6, shadowOpacity: 0.5 }
         : {}
 
@@ -87,7 +93,7 @@ const CellItem = memo(function CellItem({
         {displayText && (
           <Text
             x={center.x - 16} y={center.y - HEX_RADIUS + 4}
-            width={32} fontSize={typed && cell.subtype ? 8 : 10}
+            width={32} fontSize={!isDefaultBlocked && cell.subtype ? 8 : 10}
             fontStyle="bold" text={displayText}
             fill="#fff" align="center" listening={false}
           />
@@ -111,7 +117,7 @@ const CellItem = memo(function CellItem({
       {displayText && (
         <Text
           x={center.x - w / 2} y={center.y - h / 2 + 4}
-          width={w} fontSize={typed && cell.subtype ? 8 : 10}
+          width={w} fontSize={!isDefaultBlocked && cell.subtype ? 8 : 10}
           fontStyle="bold" text={displayText}
           fill="#fff" align="center" listening={false}
         />
@@ -132,11 +138,12 @@ interface CellsGroupProps {
   unreachableSet: Set<string>
   cellBg: string
   cellStroke: string
+  blockedBg: string
 }
 
 const CellsGroup = memo(function CellsGroup({
   cells, config, layerVisibility, pathSet, pathStart, pathEnd, selectedCellId, unreachableSet,
-  cellBg, cellStroke,
+  cellBg, cellStroke, blockedBg,
 }: CellsGroupProps) {
   return (
     <>
@@ -153,6 +160,7 @@ const CellsGroup = memo(function CellsGroup({
           unreachable={unreachableSet.has(cell.id)}
           cellBg={cellBg}
           cellStroke={cellStroke}
+          blockedBg={blockedBg}
         />
       ))}
     </>
@@ -167,7 +175,8 @@ const CellsGroup = memo(function CellsGroup({
   prev.selectedCellId === next.selectedCellId &&
   prev.unreachableSet === next.unreachableSet &&
   prev.cellBg === next.cellBg &&
-  prev.cellStroke === next.cellStroke,
+  prev.cellStroke === next.cellStroke &&
+  prev.blockedBg === next.blockedBg,
 )
 
 // ── Memoized Edge ─────────────────────────────────────────────────────────────
@@ -303,10 +312,11 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const mapBg = useUIStore(s => s.mapBg)
   const bgTheme = BG_THEMES[mapBg]
   const fitRequested = useUIStore(s => s.fitRequested)
+  const selection = useUIStore(s => s.selection)
   // pan/zoom are refs — we apply transforms imperatively to avoid re-renders on every scroll/drag
   const panRef = useRef(useUIStore.getState().pan)
   const zoomRef = useRef(useUIStore.getState().zoom)
-  const { setZoom, setPan } = useUIStore.getState()
+  const { setZoom, setPan, setSelection, clearSelection } = useUIStore.getState()
   // Tracks whether zoom is above label-readability threshold (re-renders only on threshold crossing)
   const [zoomAboveThreshold, setZoomAboveThreshold] = useState(zoomRef.current >= 0.7)
   const selectedEdgeId = useUIStore(s => s.selectedEdgeId)
@@ -334,13 +344,13 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const edgesGroupRef = useRef<Konva.Group>(null)
   const coordsGroupRef = useRef<Konva.Group>(null)
   const overlayGroupRef = useRef<Konva.Group>(null)
-  // RAF coalescing: mousemove fires far faster than 60 fps, so we accumulate cell
-  // updates in paintQueueRef and flush them once per animation frame via rafPaintRef.
-  // paintStrokedRef ensures exactly one snapshotNow() call per drag stroke,
-  // keeping the undo history clean regardless of how many cells are painted.
+  // RAF coalescing for paint strokes
   const paintQueueRef = useRef<Map<string, NodeType>>(new Map())
   const rafPaintRef = useRef<number | null>(null)
   const paintStrokedRef = useRef(false)
+  // Select tool: world-space anchor for drag rect
+  const selectAnchor = useRef<{ x: number; y: number } | null>(null)
+  const selectionRectRef = useRef<Konva.Rect>(null)
 
   // React state — only things that must trigger re-render
   const [drawStart, setDrawStart] = useState<{ coord: CellCoord; id: string } | null>(null)
@@ -393,7 +403,6 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     const { routeIdx, cellIdx } = traceStep
     const route = traceRoutes[routeIdx]
     if (!route) return m
-    // Highlight edges traversed so far in this route
     for (let i = 0; i < cellIdx && i + 1 < route.pathIds.length; i++) {
       m.set(`e_${route.pathIds[i]}_${route.pathIds[i + 1]}`, route.color)
     }
@@ -425,12 +434,10 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
         if (nextCell < route.pathIds.length) {
           return { ...prev, cellIdx: nextCell }
         }
-        // Move to next route
         const nextRoute = prev.routeIdx + 1
         if (nextRoute < traceRoutes.length) {
           return { routeIdx: nextRoute, cellIdx: 0 }
         }
-        // All done — loop back
         return { routeIdx: 0, cellIdx: 0 }
       })
     }, intervalMs)
@@ -455,8 +462,6 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   }, [])
 
   // ── Fit-to-screen ─────────────────────────────────────────────────────────
-  // widthRef/heightRef allow the effect to read current dimensions without
-  // being triggered by resize events (only explicit fit requests should re-fit).
   const widthRef = useRef(width)
   const heightRef = useRef(height)
   widthRef.current = width
@@ -478,12 +483,10 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     setZoom(newZoom)
     setPan(newPan)
     setZoomAboveThreshold(newZoom >= 0.7)
-  // Only re-run when fitRequested counter changes — width/height/map read via refs/getState
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitRequested, applyTransform])
 
   // ── World-space coord helper ──────────────────────────────────────────────
-  // Converts screen pixel → world coordinate: worldPx = (screenPx - pan) / zoom
   const worldPos = useCallback((stage: Konva.Stage) => {
     const p = stage.getPointerPosition()
     if (!p) return null
@@ -508,10 +511,8 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     panRef.current = newPan
     zoomRef.current = newZoom
     applyTransform(newPan, newZoom)
-    // Persist to store (for other components); does not trigger re-render in this component
     setZoom(newZoom)
     setPan(newPan)
-    // Trigger re-render only when crossing the coord-label readability threshold
     const above = newZoom >= 0.7
     setZoomAboveThreshold(prev => prev !== above ? above : prev)
   }, [applyTransform, setZoom, setPan])
@@ -531,7 +532,6 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     const coord = posToCell(wp.x, wp.y, map.config)
     const cellId = coord ? `r${coord.row}c${coord.col}` : null
 
-    // Select cell for cell-info panel
     setSelectedCellId(cellId)
     selectEdge(null)
 
@@ -543,7 +543,6 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
         lastPanPos.current = { x: e.evt.clientX, y: e.evt.clientY }
       }
     } else if (tool === 'type' && coord) {
-      // Snapshot once at stroke start — no clone during drag
       if (!paintStrokedRef.current) {
         snapshotNow()
         paintStrokedRef.current = true
@@ -551,14 +550,24 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       queuePaint(cellId!, activeNodeType)
     } else if (tool === 'erase') {
       if (!paintStrokedRef.current) { snapshotNow(); paintStrokedRef.current = true }
-      if (coord) queuePaint(cellId!, 'lane')
+      // Erase returns cell to default blocked state
+      if (coord) queuePaint(cellId!, 'blocked')
       const edgeId = hitTestEdge(wp.x, wp.y, map.edges, cellMap, getCenterById)
       if (edgeId) removeEdge(edgeId)
     } else if (tool === 'path' && coord) {
       setPathPoint(cellId!)
+    } else if (tool === 'select') {
+      selectAnchor.current = wp
+      clearSelection()
+    } else if (tool === 'fill' && coord) {
+      const cellIds = floodFill(coord.row, coord.col, map.cells, map.config)
+      if (cellIds.length > 0) {
+        snapshotNow()
+        setCellTypeBatch(cellIds.map(id => ({ id, nodeType: activeNodeType })))
+      }
     }
   }, [map, tool, activeNodeType, worldPos, snapshotNow, queuePaint, removeEdge, cellMap, getCenterById,
-    selectEdge, setSelectedCellId, setPathPoint])
+    selectEdge, setSelectedCellId, setPathPoint, clearSelection, setCellTypeBatch])
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (!map) return
@@ -580,12 +589,26 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     if (!wp) return
     mouseRef.current = wp
 
-    // Update hover (lightweight state — only triggers overlay re-render, not cells)
+    // Select drag — update the selection rect imperatively
+    if (tool === 'select' && e.evt.buttons === 1 && selectAnchor.current) {
+      const anchor = selectAnchor.current
+      const minX = Math.min(anchor.x, wp.x)
+      const minY = Math.min(anchor.y, wp.y)
+      if (selectionRectRef.current) {
+        selectionRectRef.current.x(minX)
+        selectionRectRef.current.y(minY)
+        selectionRectRef.current.width(Math.abs(wp.x - anchor.x))
+        selectionRectRef.current.height(Math.abs(wp.y - anchor.y))
+        selectionRectRef.current.visible(true)
+        overlayLayerRef.current?.batchDraw()
+      }
+      return
+    }
+
     const coord = posToCell(wp.x, wp.y, map.config)
     const newHoverId = coord ? `r${coord.row}c${coord.col}` : null
     setHoverCellId(prev => prev === newHoverId ? prev : newHoverId)
 
-    // Update draw preview line imperatively — no state change needed
     if (drawStart && previewLineRef.current) {
       const startCenter = cellCenters.get(drawStart.id)
       if (startCenter) {
@@ -595,18 +618,16 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       }
     }
 
-    // Continuous lane painting — create edge each time cursor enters new adjacent cell
     if (tool === 'draw' && e.evt.buttons === 1 && drawStart && coord) {
       const newId = `r${coord.row}c${coord.col}`
       if (newId !== drawStart.id && isAdjacent(drawStart.coord, coord, map.config.cellShape)) {
         addEdge(drawStart.id, newId, getDirection(drawStart.coord, coord, map.config.cellShape))
-        setDrawStart({ coord, id: newId })  // chain: new start is current cell
+        setDrawStart({ coord, id: newId })
       }
     }
 
-    // Paint type or erase — queued, flushed at most once per animation frame
     if ((tool === 'type' || tool === 'erase') && e.evt.buttons === 1 && coord) {
-      queuePaint(`r${coord.row}c${coord.col}`, tool === 'erase' ? 'lane' : activeNodeType)
+      queuePaint(`r${coord.row}c${coord.col}`, tool === 'erase' ? 'blocked' : activeNodeType)
     }
   }, [map, tool, activeNodeType, drawStart, worldPos, applyTransform, setPan, cellCenters, addEdge, queuePaint])
 
@@ -614,10 +635,46 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     isPanning.current = false
     if (previewLineRef.current) previewLineRef.current.visible(false)
     overlayLayerRef.current?.batchDraw()
-    // Flush any pending paint and end the stroke
     if (rafPaintRef.current) { cancelAnimationFrame(rafPaintRef.current); rafPaintRef.current = null }
     flushPaintQueue()
     paintStrokedRef.current = false
+
+    // Select tool: commit the drag rect as a selection
+    if (tool === 'select' && selectAnchor.current && map) {
+      const stage = e.target.getStage()
+      if (stage) {
+        const wp = worldPos(stage)
+        if (wp) {
+          const anchor = selectAnchor.current
+          const dx = Math.abs(wp.x - anchor.x)
+          const dy = Math.abs(wp.y - anchor.y)
+          if (dx < 2 && dy < 2) {
+            // Single click — select just the cell under the cursor
+            const coord = posToCell(wp.x, wp.y, map.config)
+            if (coord) setSelection(new Set([`r${coord.row}c${coord.col}`]))
+          } else {
+            // Drag — select all cells whose center falls in the rect
+            const minX = Math.min(anchor.x, wp.x)
+            const minY = Math.min(anchor.y, wp.y)
+            const maxX = Math.max(anchor.x, wp.x)
+            const maxY = Math.max(anchor.y, wp.y)
+            const selected = new Set(
+              map.cells
+                .filter(c => {
+                  const center = cellCenters.get(c.id)
+                  return center && center.x >= minX && center.x <= maxX && center.y >= minY && center.y <= maxY
+                })
+                .map(c => c.id),
+            )
+            setSelection(selected)
+          }
+        }
+      }
+      selectAnchor.current = null
+      if (selectionRectRef.current) { selectionRectRef.current.visible(false); overlayLayerRef.current?.batchDraw() }
+      setDrawStart(null)
+      return
+    }
 
     if (!map || !drawStart || tool !== 'draw') { setDrawStart(null); return }
 
@@ -630,7 +687,6 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     if (endCoord) {
       const endId = `r${endCoord.row}c${endCoord.col}`
       if (endId === drawStart.id) {
-        // Click on same cell → toggle existing edge direction
         const edge = map.edges.find(ed => ed.from === drawStart.id || ed.to === drawStart.id)
         if (edge) toggleEdgeBidirectional(edge.id)
       } else if (isAdjacent(drawStart.coord, endCoord, map.config.cellShape)) {
@@ -638,11 +694,10 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       }
     }
     setDrawStart(null)
-  }, [map, drawStart, tool, worldPos, addEdge, toggleEdgeBidirectional, flushPaintQueue])
+  }, [map, drawStart, tool, worldPos, addEdge, toggleEdgeBidirectional, flushPaintQueue, cellCenters, setSelection])
 
   if (!map) return null
 
-  // Hover highlight position
   const hoverCenter = hoverCellId ? cellCenters.get(hoverCellId) : null
   const shape = map.config.cellShape
 
@@ -656,7 +711,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onContextMenu={(e) => e.evt.preventDefault()}
-      style={{ cursor: drawStart ? 'crosshair' : tool === 'erase' ? 'cell' : 'default', background: bgTheme.canvas }}
+      style={{ cursor: drawStart ? 'crosshair' : tool === 'erase' ? 'cell' : tool === 'select' ? 'crosshair' : 'default', background: bgTheme.canvas }}
     >
       {/* ── Static cells layer (listening=false for perf) ─────────────── */}
       <Layer listening={false}>
@@ -674,6 +729,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
             unreachableSet={unreachableSet}
             cellBg={bgTheme.cell}
             cellStroke={bgTheme.stroke}
+            blockedBg={bgTheme.blockedBg}
           />
         </Group>
       </Layer>
@@ -710,11 +766,12 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
         </Layer>
       )}
 
-      {/* ── Overlay: hover + preview + trace + path endpoints ─────────── */}
+      {/* ── Overlay: hover + preview + trace + path endpoints + selection ── */}
       <Layer ref={overlayLayerRef} listening={false}>
         <Group ref={overlayGroupRef}
           x={panRef.current.x} y={panRef.current.y}
           scaleX={zoomRef.current} scaleY={zoomRef.current}>
+
           {/* Hover highlight */}
           {hoverCenter && (
             shape === 'hexagon'
@@ -736,6 +793,36 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
           {/* Draw preview line — updated imperatively via ref */}
           <Line ref={previewLineRef} points={[0, 0, 0, 0]} visible={false}
             stroke="#60a5fa" strokeWidth={2} dash={[6, 4]} opacity={0.7} />
+
+          {/* Selection drag rect — updated imperatively via ref */}
+          <Rect
+            ref={selectionRectRef}
+            visible={false}
+            x={0} y={0} width={0} height={0}
+            fill="rgba(96,165,250,0.08)"
+            stroke="#60a5fa" strokeWidth={1}
+            dash={[6, 3]}
+          />
+
+          {/* Selected cell highlights (committed selection) */}
+          {selection.size > 0 && map.cells.filter(c => selection.has(c.id)).map(c => {
+            const center = cellCenters.get(c.id)
+            if (!center) return null
+            const w = shape === 'rectangle' ? RECT_W : SQUARE_SIZE
+            const h = shape === 'rectangle' ? RECT_H : SQUARE_SIZE
+            return shape === 'hexagon'
+              ? <RegularPolygon key={`sel-${c.id}`}
+                  x={center.x} y={center.y}
+                  sides={6} radius={HEX_RADIUS - 1}
+                  fill="rgba(96,165,250,0.22)" stroke="#60a5fa" strokeWidth={1.5}
+                />
+              : <Rect key={`sel-${c.id}`}
+                  x={center.x - w / 2 + 1} y={center.y - h / 2 + 1}
+                  width={w - 2} height={h - 2}
+                  cornerRadius={shape === 'square' ? 4 : 2}
+                  fill="rgba(96,165,250,0.22)" stroke="#60a5fa" strokeWidth={1.5}
+                />
+          })}
 
           {/* Path endpoints */}
           {pathStart && (() => {

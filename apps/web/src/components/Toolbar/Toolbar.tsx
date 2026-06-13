@@ -11,7 +11,9 @@ import type { Tool } from '../../store/uiStore'
 const TOOLS: { id: Tool; label: string; key: string; tip: string }[] = [
   { id: 'draw', label: 'Draw', key: 'D', tip: 'Drag across adjacent cells to paint lanes. Click lane to toggle bidirectional.' },
   { id: 'type', label: 'Type', key: 'T', tip: 'Click or drag to paint cell types. Select type in layer panel.' },
-  { id: 'erase', label: 'Erase', key: 'E', tip: 'Click cell to reset type. Click lane to delete it.' },
+  { id: 'erase', label: 'Erase', key: 'E', tip: 'Click or drag to reset cells to blocked. Click a lane to delete it.' },
+  { id: 'select', label: 'Select', key: 'S', tip: 'Drag to select a rectangular region of cells. Click to select one cell. Then apply a type from the toolbar.' },
+  { id: 'fill', label: 'Fill', key: 'F', tip: 'Click a cell to flood-fill all contiguous same-type cells with the active type.' },
   { id: 'path', label: 'Path', key: 'P', tip: 'Click two cells to preview shortest path.' },
 ]
 
@@ -24,7 +26,10 @@ export default function Toolbar() {
     setTraceRoutes, setTraceRunning, setTraceSpeed,
     showCellCoords, toggleCellCoords,
     mapBg, toggleMapBg,
+    activeNodeType, selection,
   } = useUIStore()
+  const { clearSelection } = useUIStore.getState()
+  const { snapshotNow, setCellTypeBatch } = useGridStore.getState()
 
   const pt = PANE_THEMES[mapBg]
   const [routesExpanded, setRoutesExpanded] = useState(false)
@@ -68,6 +73,14 @@ export default function Toolbar() {
     }
   }
 
+  const handleApplySelection = () => {
+    if (!map || selection.size === 0) return
+    snapshotNow()
+    setCellTypeBatch(Array.from(selection).map(id => ({ id, nodeType: activeNodeType })))
+    clearSelection()
+    showToast(`Applied ${activeNodeType} to ${selection.size} cell${selection.size > 1 ? 's' : ''} ✓`)
+  }
+
   const handleTrace = () => {
     if (!map) return
     if (traceRunning) {
@@ -104,6 +117,31 @@ export default function Toolbar() {
           </button>
         ))}
       </div>
+
+      {/* Apply selection (only visible when select tool is active with a non-empty selection) */}
+      {tool === 'select' && selection.size > 0 && (
+        <>
+          <Sep pt={pt} />
+          <button
+            onClick={handleApplySelection}
+            style={{
+              ...actionBtn('#1e3a8a', pt),
+              border: '1px solid #3b82f6',
+              color: '#93c5fd',
+            }}
+            title={`Paint ${activeNodeType} onto ${selection.size} selected cell${selection.size > 1 ? 's' : ''}`}
+          >
+            Apply {activeNodeType} ({selection.size})
+          </button>
+          <button
+            onClick={clearSelection}
+            style={{ ...actionBtn(null, pt), border: `1px solid ${pt.border}` }}
+            title="Clear selection"
+          >
+            ✕ Clear
+          </button>
+        </>
+      )}
 
       <Sep pt={pt} />
 

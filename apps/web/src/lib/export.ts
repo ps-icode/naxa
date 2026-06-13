@@ -43,7 +43,9 @@ export function exportPNG(map: GridMap, bg: BgMode = 'dark'): void {
 
   // Cells
   for (const cell of map.cells) {
-    const typed = cell.nodeType !== 'lane'
+    // Default blocked (no subtype) = implicit floor state; explicitly typed = everything else
+    const isDefaultBlocked = cell.nodeType === 'blocked' && !cell.subtype
+    const typed = !isDefaultBlocked
     const visible = !typed || visibleTypes.has(cell.nodeType)
     const opacity = typed ? 0.8 : 1
 
@@ -152,7 +154,8 @@ export function exportCAD(map: GridMap, bg: BgMode = 'dark'): void {
     const center = getCellCenter(cell.coord, map.config)
     const cx = center.x + DIM_PAD
     const cy = center.y + DIM_PAD
-    const stroke = NODE_TYPE_COLORS[cell.nodeType]
+    const isDefaultBlocked = cell.nodeType === 'blocked' && !cell.subtype
+    const stroke = isDefaultBlocked ? theme.stroke : NODE_TYPE_COLORS[cell.nodeType]
 
     if (shape === 'hexagon') {
       layer.add(new Konva.RegularPolygon({

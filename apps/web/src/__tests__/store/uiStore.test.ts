@@ -24,6 +24,7 @@ function freshStore(): void {
     showCellCoords: false,
     mapBg: 'dark',
     fitRequested: 0,
+    selection: new Set(),
   })
 }
 

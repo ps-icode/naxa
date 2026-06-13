@@ -18,9 +18,9 @@ describe('newMap', () => {
     expect(useGridStore.getState().map!.cells).toHaveLength(9)
   })
 
-  it('all cells start as lane type', () => {
+  it('all cells start as blocked type', () => {
     useGridStore.getState().newMap('Test', BASE_CONFIG)
-    expect(useGridStore.getState().map!.cells.every(c => c.nodeType === 'lane')).toBe(true)
+    expect(useGridStore.getState().map!.cells.every(c => c.nodeType === 'blocked')).toBe(true)
   })
 
   it('edge list starts empty', () => {
@@ -426,9 +426,9 @@ describe('resetCells', () => {
     useGridStore.setState({ past: [] })
   })
 
-  it('resets all cells to lane type', () => {
+  it('resets all cells to blocked type', () => {
     useGridStore.getState().resetCells()
-    expect(useGridStore.getState().map!.cells.every(c => c.nodeType === 'lane')).toBe(true)
+    expect(useGridStore.getState().map!.cells.every(c => c.nodeType === 'blocked')).toBe(true)
   })
 
   it('clears all edges', () => {

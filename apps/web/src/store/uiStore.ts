@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { NodeType } from '@naxa/core'
 import type { ValidationResult } from '../lib/graph'
 
-export type Tool = 'draw' | 'type' | 'erase' | 'path'
+export type Tool = 'draw' | 'type' | 'erase' | 'path' | 'select' | 'fill'
 
 export interface TraceRoute {
   pathIds: string[]
@@ -27,6 +27,8 @@ interface UIStore {
   traceRoutes: TraceRoute[]
   traceRunning: boolean
   traceSpeed: number   // cells per second (1–10)
+  // Bulk selection (select tool)
+  selection: Set<string>
 
   setTool: (tool: Tool) => void
   setActiveNodeType: (t: NodeType) => void
@@ -50,6 +52,8 @@ interface UIStore {
   toggleMapBg: () => void
   fitRequested: number
   requestFitToScreen: () => void
+  setSelection: (ids: Set<string>) => void
+  clearSelection: () => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -70,9 +74,10 @@ export const useUIStore = create<UIStore>((set) => ({
   traceSpeed: 3,
   showCellCoords: false,
   mapBg: 'dark',
+  selection: new Set<string>(),
 
   setTool: (tool) =>
-    set({ tool, selectedEdgeId: null, pathStart: null, pathEnd: null, pathResult: null, traceRunning: false }),
+    set({ tool, selectedEdgeId: null, pathStart: null, pathEnd: null, pathResult: null, traceRunning: false, selection: new Set() }),
   setActiveNodeType: (activeNodeType) => set({ activeNodeType }),
   selectEdge: (selectedEdgeId) => set({ selectedEdgeId }),
   setSelectedCellId: (selectedCellId) => set({ selectedCellId }),
@@ -107,4 +112,6 @@ export const useUIStore = create<UIStore>((set) => ({
   toggleMapBg: () => set(s => ({ mapBg: s.mapBg === 'dark' ? 'light' : 'dark' })),
   fitRequested: 0,
   requestFitToScreen: () => set(s => ({ fitRequested: s.fitRequested + 1 })),
+  setSelection: (selection) => set({ selection }),
+  clearSelection: () => set({ selection: new Set() }),
 }))
