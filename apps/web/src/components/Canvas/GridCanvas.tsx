@@ -409,6 +409,9 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const [drawStart, setDrawStart] = useState<{ coord: CellCoord; id: string } | null>(null)
   const [hoverCellId, setHoverCellId] = useState<string | null>(null)
   const [traceStep, setTraceStep] = useState<{ routeIdx: number; cellIdx: number }>({ routeIdx: 0, cellIdx: 0 })
+  // Viewport culling: world-space bounds of the visible canvas area (updated ≤100ms after pan/zoom)
+  const [viewportBounds, setViewportBounds] = useState({ minX: -Infinity, minY: -Infinity, maxX: Infinity, maxY: Infinity })
+  const vbTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── RAF-batched paint/erase flush ─────────────────────────────────────────
   const flushPaintQueue = useCallback(() => {
@@ -450,6 +453,17 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     }
     return m
   }, [map?.cells, map?.config])
+
+  // Cells visible within the current viewport (or all cells if bounds not yet computed).
+  const visibleCells = useMemo(() => {
+    if (!map) return []
+    const { minX, minY, maxX, maxY } = viewportBounds
+    if (!isFinite(minX)) return map.cells // initial/infinite bounds: show all
+    return map.cells.filter(cell => {
+      const c = cellCenters.get(cell.id)
+      return c !== undefined && c.x >= minX && c.x <= maxX && c.y >= minY && c.y <= maxY
+    })
+  }, [map?.cells, cellCenters, viewportBounds])
 
   // Translates canvas pointer-position coords into the cell's actual store ID (UUID or legacy).
   const coordToId = useMemo(() => {
@@ -518,6 +532,21 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
       grp.current.scaleX(z); grp.current.scaleY(z)
       grp.current.getLayer()?.batchDraw()
     }
+    // Debounce viewport-bounds React state update: cancel previous timer, reschedule with latest p/z.
+    // 100ms gives a stable rect after the user stops panning; 150 world-unit margin avoids pop-in.
+    if (vbTimerRef.current) clearTimeout(vbTimerRef.current)
+    vbTimerRef.current = setTimeout(() => {
+      vbTimerRef.current = null
+      const w = widthRef.current
+      const h = heightRef.current
+      const MARGIN = 150
+      setViewportBounds({
+        minX: (-p.x / z) - MARGIN,
+        minY: (-p.y / z) - MARGIN,
+        maxX: ((w - p.x) / z) + MARGIN,
+        maxY: ((h - p.y) / z) + MARGIN,
+      })
+    }, 100)
   }, [])
 
   // ── Fit-to-screen ─────────────────────────────────────────────────────────
@@ -778,7 +807,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
           x={panRef.current.x} y={panRef.current.y}
           scaleX={zoomRef.current} scaleY={zoomRef.current}>
           <CellsGroup
-            cells={map.cells}
+            cells={visibleCells}
             config={map.config}
             layerVisibility={layerVisibility}
             pathSet={pathSet}
@@ -815,7 +844,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
             x={panRef.current.x} y={panRef.current.y}
             scaleX={zoomRef.current} scaleY={zoomRef.current}>
             <CoordsGroup
-              cells={map.cells}
+              cells={visibleCells}
               config={map.config}
               dotColor={bgTheme.dot}
               labelColor={bgTheme.coordText}
@@ -834,7 +863,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
             hoverCenter={hoverCenter}
             shape={shape}
             selection={selection}
-            cells={map.cells}
+            cells={visibleCells}
             cellCenters={cellCenters}
             pathStart={pathStart}
             pathEnd={pathEnd}
