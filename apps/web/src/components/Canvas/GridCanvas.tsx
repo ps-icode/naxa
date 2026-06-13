@@ -28,7 +28,7 @@ export const BG_THEMES = {
 } as const
 
 const NODE_ICONS: Record<string, string> = {
-  // traversable and lane intentionally absent — plain passable floor
+  // traversable and path intentionally absent — plain passable floor
   source: 'S', destination: 'D', charging: '⚡', parking: 'P', blocked: '✕', junction: '✦',
 }
 
@@ -118,7 +118,7 @@ const CellItem = memo(function CellItem({
       ? { shadowColor: '#ef4444', shadowBlur: 10, shadowOpacity: 0.8 }
       : {}
 
-  // Labels only on assigned, non-traversable/lane cells, when labels are toggled on
+  // Labels only on assigned, non-traversable/path cells, when labels are toggled on
   const displayText = showCellLabels && !isUnassigned
     ? (cell.label ?? cell.subtype?.replace(/_/g, ' ') ?? NODE_ICONS[cell.nodeType])
     : undefined
@@ -444,13 +444,21 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   const cellCenters = useMemo(() => {
     if (!map) return new Map<string, { x: number; y: number }>()
     const m = new Map<string, { x: number; y: number }>()
-    for (let row = 0; row < map.config.rows; row++) {
-      for (let col = 0; col < map.config.cols; col++) {
-        m.set(`r${row}c${col}`, getCellCenter({ row, col }, map.config))
-      }
+    for (const cell of map.cells) {
+      m.set(cell.id, getCellCenter(cell.coord, map.config))
     }
     return m
-  }, [map?.config])
+  }, [map?.cells, map?.config])
+
+  // Translates canvas pointer-position coords into the cell's actual store ID (UUID or legacy).
+  const coordToId = useMemo(() => {
+    if (!map) return new Map<string, string>()
+    const m = new Map<string, string>()
+    for (const cell of map.cells) {
+      m.set(`r${cell.coord.row}c${cell.coord.col}`, cell.id)
+    }
+    return m
+  }, [map?.cells])
 
   const layerVisibility = useMemo(() => {
     if (!map) return new Map<string, boolean>()
@@ -580,28 +588,28 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     if (!wp) return
 
     const coord = posToCell(wp.x, wp.y, map.config)
-    const cellId = coord ? `r${coord.row}c${coord.col}` : null
+    const cellId = coord ? (coordToId.get(`r${coord.row}c${coord.col}`) ?? null) : null
 
     setSelectedCellId(cellId)
     selectEdge(null)
 
     if (tool === 'draw') {
-      if (coord) {
-        setDrawStart({ coord, id: cellId! })
+      if (coord && cellId) {
+        setDrawStart({ coord, id: cellId })
       } else {
         isPanning.current = true
         lastPanPos.current = { x: e.evt.clientX, y: e.evt.clientY }
       }
-    } else if (tool === 'type' && coord) {
+    } else if (tool === 'type' && cellId) {
       if (!paintStrokedRef.current) { snapshotNow(); paintStrokedRef.current = true }
-      queuePaint(cellId!, activeNodeType)
+      queuePaint(cellId, activeNodeType)
     } else if (tool === 'erase') {
       if (!paintStrokedRef.current) { snapshotNow(); paintStrokedRef.current = true }
-      if (coord) queueErase(cellId!)
+      if (cellId) queueErase(cellId)
       const edgeId = hitTestEdge(wp.x, wp.y, map.edges, cellMap, getCenterById)
       if (edgeId) removeEdge(edgeId)
-    } else if (tool === 'path' && coord) {
-      setPathPoint(cellId!)
+    } else if (tool === 'path' && cellId) {
+      setPathPoint(cellId)
     } else if (tool === 'select') {
       selectAnchor.current = wp
       clearSelection()
@@ -612,8 +620,8 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
         setCellTypeBatch(cellIds.map(id => ({ id, nodeType: activeNodeType })))
       }
     }
-  }, [map, tool, activeNodeType, worldPos, snapshotNow, queuePaint, queueErase, removeEdge, cellMap, getCenterById,
-    selectEdge, setSelectedCellId, setPathPoint, clearSelection, setCellTypeBatch])
+  }, [map, tool, activeNodeType, worldPos, coordToId, snapshotNow, queuePaint, queueErase, removeEdge, cellMap,
+    getCenterById, selectEdge, setSelectedCellId, setPathPoint, clearSelection, setCellTypeBatch])
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     if (!map) return
@@ -649,7 +657,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     }
 
     const coord = posToCell(wp.x, wp.y, map.config)
-    const newHoverId = coord ? `r${coord.row}c${coord.col}` : null
+    const newHoverId = coord ? (coordToId.get(`r${coord.row}c${coord.col}`) ?? null) : null
     setHoverCellId(prev => prev === newHoverId ? prev : newHoverId)
 
     if (drawStart && previewLineRef.current) {
@@ -662,20 +670,22 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     }
 
     if (tool === 'draw' && e.evt.buttons === 1 && drawStart && coord) {
-      const newId = `r${coord.row}c${coord.col}`
-      if (newId !== drawStart.id && isAdjacent(drawStart.coord, coord, map.config.cellShape)) {
+      const newId = coordToId.get(`r${coord.row}c${coord.col}`)
+      if (newId && newId !== drawStart.id && isAdjacent(drawStart.coord, coord, map.config.cellShape)) {
         addEdge(drawStart.id, newId, getDirection(drawStart.coord, coord, map.config.cellShape))
         setDrawStart({ coord, id: newId })
       }
     }
 
     if (tool === 'type' && e.evt.buttons === 1 && coord) {
-      queuePaint(`r${coord.row}c${coord.col}`, activeNodeType)
+      const id = coordToId.get(`r${coord.row}c${coord.col}`)
+      if (id) queuePaint(id, activeNodeType)
     }
     if (tool === 'erase' && e.evt.buttons === 1 && coord) {
-      queueErase(`r${coord.row}c${coord.col}`)
+      const id = coordToId.get(`r${coord.row}c${coord.col}`)
+      if (id) queueErase(id)
     }
-  }, [map, tool, activeNodeType, drawStart, worldPos, applyTransform, setPan, cellCenters, addEdge, queuePaint, queueErase])
+  }, [map, tool, activeNodeType, drawStart, worldPos, coordToId, applyTransform, setPan, cellCenters, addEdge, queuePaint, queueErase])
 
   const handleMouseUp = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     isPanning.current = false
@@ -693,7 +703,8 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
           const anchor = selectAnchor.current
           if (Math.abs(wp.x - anchor.x) < 2 && Math.abs(wp.y - anchor.y) < 2) {
             const coord = posToCell(wp.x, wp.y, map.config)
-            if (coord) setSelection(new Set([`r${coord.row}c${coord.col}`]))
+            const selId = coord ? coordToId.get(`r${coord.row}c${coord.col}`) : undefined
+            if (selId) setSelection(new Set([selId]))
           } else {
             const minX = Math.min(anchor.x, wp.x), maxX = Math.max(anchor.x, wp.x)
             const minY = Math.min(anchor.y, wp.y), maxY = Math.max(anchor.y, wp.y)
@@ -723,16 +734,16 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
 
     const endCoord = posToCell(wp.x, wp.y, map.config)
     if (endCoord) {
-      const endId = `r${endCoord.row}c${endCoord.col}`
+      const endId = coordToId.get(`r${endCoord.row}c${endCoord.col}`)
       if (endId === drawStart.id) {
         const edge = map.edges.find(ed => ed.from === drawStart.id || ed.to === drawStart.id)
         if (edge) toggleEdgeBidirectional(edge.id)
-      } else if (isAdjacent(drawStart.coord, endCoord, map.config.cellShape)) {
+      } else if (endId && isAdjacent(drawStart.coord, endCoord, map.config.cellShape)) {
         addEdge(drawStart.id, endId, getDirection(drawStart.coord, endCoord, map.config.cellShape))
       }
     }
     setDrawStart(null)
-  }, [map, drawStart, tool, worldPos, addEdge, toggleEdgeBidirectional, flushPaintQueue, cellCenters, setSelection])
+  }, [map, drawStart, tool, worldPos, coordToId, addEdge, toggleEdgeBidirectional, flushPaintQueue, cellCenters, setSelection])
 
   if (!map) return null
 
