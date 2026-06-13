@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type Konva from 'konva'
 import GridCanvas from './components/Canvas/GridCanvas'
+import CanvasErrorBoundary from './components/Canvas/CanvasErrorBoundary'
 import LayerPanel from './components/LayerPanel/LayerPanel'
 import Toolbar from './components/Toolbar/Toolbar'
 import MapSetupModal from './components/MapSetup/MapSetupModal'
@@ -91,7 +92,9 @@ export default function App() {
         {/* Canvas */}
         <main style={{ flex: 1, overflow: 'hidden', position: 'relative', background: '#080818' }}>
           {map ? (
-            <GridCanvas width={size.w} height={size.h} stageRef={stageRef} />
+            <CanvasErrorBoundary>
+              <GridCanvas width={size.w} height={size.h} stageRef={stageRef} />
+            </CanvasErrorBoundary>
           ) : (
             <EmptyCanvas onNew={() => useUIStore.getState().setShowNewMapModal(true)} />
           )}
