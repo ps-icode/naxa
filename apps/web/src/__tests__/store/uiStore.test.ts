@@ -7,7 +7,7 @@ import type { ValidationResult } from '../../lib/graph'
 function freshStore(): void {
   useUIStore.setState({
     tool: 'draw',
-    activeNodeType: 'lane',
+    activeNodeType: 'traversable',
     selectedEdgeId: null,
     selectedCellId: null,
     pathStart: null,

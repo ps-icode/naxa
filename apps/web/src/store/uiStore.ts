@@ -58,7 +58,7 @@ interface UIStore {
 
 export const useUIStore = create<UIStore>((set) => ({
   tool: 'draw',
-  activeNodeType: 'lane',
+  activeNodeType: 'traversable',
   selectedEdgeId: null,
   selectedCellId: null,
   pathStart: null,

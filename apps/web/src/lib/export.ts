@@ -8,6 +8,7 @@ import {
 
 const NODE_ICONS: Record<string, string> = {
   source: 'S', destination: 'D', charging: '⚡', parking: 'P', blocked: '✕', junction: '✦',
+  // traversable and lane intentionally absent — no icon (passable floor, no label needed)
 }
 
 type BgMode = 'dark' | 'light'

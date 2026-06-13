@@ -3,6 +3,7 @@
 export type CellShape = 'square' | 'rectangle' | 'hexagon'
 
 export type NodeType =
+  | 'traversable'
   | 'lane'
   | 'source'
   | 'destination'
@@ -16,6 +17,7 @@ export type Direction = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW'
 // ── Subtypes (inspired by VDA5050, MiR, Locus, Geek+, Fetch, OTTO) ────────────
 
 export const SUBTYPES: Record<NodeType, string[]> = {
+  traversable: ['aisle', 'corridor', 'cross_aisle', 'staging', 'custom'],
   lane:        [],
   source:      ['pick', 'feeder', 'induction', 'load', 'input', 'buffer', 'conveyor_in', 'collection', 'custom'],
   destination: ['drop', 'put', 'delivery', 'output', 'unload', 'deposit', 'conveyor_out', 'bin', 'custom'],
@@ -82,6 +84,7 @@ export interface GridMap {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 export const NODE_TYPE_COLORS: Record<NodeType, string> = {
+  traversable: '#0ea5e9',
   lane:        '#4a5568',
   source:      '#22c55e',
   destination: '#3b82f6',
@@ -92,7 +95,8 @@ export const NODE_TYPE_COLORS: Record<NodeType, string> = {
 }
 
 export const DEFAULT_LAYERS: Layer[] = [
-  { id: 'layer-lane',        name: 'Boundaries',   nodeType: 'lane',        visible: true, color: NODE_TYPE_COLORS.lane },
+  { id: 'layer-traversable', name: 'Traversable',  nodeType: 'traversable', visible: true, color: NODE_TYPE_COLORS.traversable },
+  { id: 'layer-lane',        name: 'Lanes',        nodeType: 'lane',        visible: true, color: NODE_TYPE_COLORS.lane },
   { id: 'layer-source',      name: 'Sources',      nodeType: 'source',      visible: true, color: NODE_TYPE_COLORS.source },
   { id: 'layer-destination', name: 'Destinations', nodeType: 'destination', visible: true, color: NODE_TYPE_COLORS.destination },
   { id: 'layer-charging',    name: 'Charging',     nodeType: 'charging',    visible: true, color: NODE_TYPE_COLORS.charging },
