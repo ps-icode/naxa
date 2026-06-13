@@ -19,8 +19,9 @@ GridMap
  │     ├── cellShape: 'square' | 'rectangle' | 'hexagon'
  │     ├── cellSizeMeters: number  (col width or hex circumradius)
  │     └── cellHeightMeters?: number  (rectangle rows only)
+ ├── schemaVersion: number  (current: 2 — used by migrateMap() pipeline)
  ├── cells: GridCell[]
- │     ├── id: string  (format: "r{row}c{col}")
+ │     ├── id: string  (UUID v4 — crypto.randomUUID() at creation)
  │     ├── coord: { row, col }
  │     ├── nodeType: NodeType
  │     ├── assigned?: boolean  ← KEY FIELD (see §2.1)
@@ -43,7 +44,7 @@ GridMap
 ### 1.2 NodeType Enum
 
 ```
-'traversable' | 'lane' | 'source' | 'destination' |
+'traversable' | 'path' | 'source' | 'destination' |
 'charging' | 'parking' | 'blocked' | 'junction'
 ```
 
@@ -69,12 +70,16 @@ The `assigned` flag is the central semantic distinction in the data model:
 - `clearCellBatch(ids)` → sets `assigned: false`, nodeType back to 'blocked'
 - `resetCells()` → sets `assigned: false` on all cells
 
-**Backwards compat (`normaliseCells`):**
-When loading old maps (pre-v0.19) that lack the `assigned` field:
+**Schema migration pipeline (`migrateMap`):**
+`loadMap` passes the raw JSON through `migrateMap(raw)` before storing it:
 ```
-assigned = existing_value ?? (nodeType !== 'blocked')
+CURRENT_SCHEMA_VERSION = 2
+
+v1 → v2: assigns the `assigned` boolean field on every cell
+  assigned = c.assigned ?? (c.nodeType !== 'blocked')
+  (old non-blocked cells → true; old blocked/default cells → false)
 ```
-i.e., old non-blocked cells become `assigned: true`; old blocked cells become `assigned: false`.
+Maps without a `schemaVersion` field are treated as v1.
 
 ### 2.2 Flood Fill (`lib/grid/floodFill.ts`)
 
@@ -194,21 +199,40 @@ key behaviours:
 
 ### 4.1 GridCanvas.tsx
 
-The single largest component (~600 lines). Manages:
+The primary canvas component. Manages:
 - Konva Stage with 4 layers: background, cells, edges, overlay
 - Pointer events → tool dispatch (draw, type, erase, fill, path, select)
 - RAF queue refs for paint/erase batching
 - Zoom/pan via Konva refs (bypasses React render cycle)
-- Cell center memoization (`cellCentersMap`)
+- `coordToId` map: `Map<'r{row}c{col}', cell.id>` — translates pointer coords → UUID cell IDs
+- `cellCenters` keyed by `cell.id` (UUID) — used for all canvas lookups
+- `visibleCells` — viewport-culled cell list (debounced, 100ms after pan/zoom)
 - Hatch patterns created once via `makeHatch()` and reused
 - Trace animation loop via `useEffect` + `requestAnimationFrame`
 - All canvas text (labels, coords) rendered as Konva `Text` nodes
 
-**Sub-components inside GridCanvas:**
-- `CellsGroup` — memoized, re-renders only when cells/theme/labels change
+**Sub-components:**
+- `CellsGroup` — memoized, re-renders only when cells/theme/labels change; receives `visibleCells`
 - `CellItem` — renders one cell (shape + fill + label)
-- `CoordsGroup` — memoized coordinate label overlay
+- `CoordsGroup` — memoized coordinate label overlay; receives `visibleCells`
 - `EdgeLayer` — all edge arrows
+- `CanvasOverlay` — hover highlight, selection rect, path preview, trace animation overlays (in `CanvasOverlay.tsx`)
+
+### 4.2 CanvasErrorBoundary.tsx
+
+React class component (`ErrorBoundary` requires class syntax). Wraps `GridCanvas` in `App.tsx`.
+On Konva error or null deref, catches the throw and renders a "Canvas error — Retry" fallback.
+The Retry button calls `this.setState({ error: null })` to remount `GridCanvas`.
+
+### 4.3 CanvasOverlay.tsx
+
+Extracted from `GridCanvas.tsx`. Contains four local function components:
+- `HoverHighlight` — semi-transparent highlight over hovered cell
+- `SelectionOverlay` — dashed rectangle for drag-select region
+- `PathOverlay` — BFS shortest-path highlight (blue line + markers)
+- `TraceOverlay` — animated trace dots (start circle, end ring, cursor dot)
+
+Receives `visibleCells`, `cellCenters`, path/trace state from `GridCanvas` as props.
 
 ### 4.2 Toolbar.tsx
 
@@ -261,17 +285,17 @@ Coverage enforced by `vitest.config.ts` thresholds — CI fails if coverage drop
 
 ### 6.2 Test Files
 
-| File                            | Tests | Covers                                              |
-|---------------------------------|-------|-----------------------------------------------------|
-| lib/api.test.ts                 | 13    | fetch wrapper, localStorage fallback, error paths   |
-| lib/export.test.ts              | ~35   | buildExportPayload, YAML, field presets, download   |
-| lib/floodFill.test.ts           | 16    | assigned semantics, sq/rect/hex connectivity        |
-| lib/geometry.test.ts            | 46    | cell center/corner math for all 3 shapes            |
-| lib/graph.test.ts               | 33    | BFS, validation, trace route building               |
-| lib/performance.test.ts         | 12    | Paint, BFS, history timing regressions              |
-| store/gridStore.test.ts         | 72    | All actions, assigned field, clearCellBatch         |
-| store/uiStore.test.ts           | ~38   | All setters, toggles, toast, selection              |
-| **Total**                       | **270** |                                                   |
+| File                            | Tests | Covers                                                        |
+|---------------------------------|-------|---------------------------------------------------------------|
+| lib/api.test.ts                 | 19    | fetch wrapper, listPage pagination, localStorage fallback     |
+| lib/export.test.ts              | ~35   | buildExportPayload, YAML, field presets, download             |
+| lib/floodFill.test.ts           | 16    | assigned semantics, sq/rect/hex connectivity                  |
+| lib/geometry.test.ts            | 46    | cell center/corner math for all 3 shapes                      |
+| lib/graph.test.ts               | 33    | BFS, validation, trace route building                         |
+| lib/performance.test.ts         | 12    | Paint, BFS, history timing regressions                        |
+| store/gridStore.test.ts         | 72    | All actions, UUID cell IDs, clearCellBatch, migrateMap        |
+| store/uiStore.test.ts           | ~38   | All setters, toggles, toast, selection                        |
+| **Total**                       | **278** |                                                             |
 
 ### 6.3 Test Tooling Notes
 
@@ -305,6 +329,8 @@ for v0.19 since no production maps exist yet.
 
 ### 7.2 Export format compatibility
 
-The `id` field in cells uses the `r{row}c{col}` format (e.g., `r0c5`). This is an
-internal implementation detail and may change in future if maps support cell IDs
-that don't derive from coordinates (e.g., after copy-paste or grid resize).
+Cell IDs are now UUID v4 strings (e.g., `550e8400-e29b-41d4-a716-446655440000`).
+Edge IDs follow `e_{fromId}_{toId}` using the UUID cell IDs.
+Maps saved before this change (v1 schema) used `r{row}c{col}` IDs — these are
+migrated transparently on load via `migrateMap()` but the IDs themselves remain
+as-saved in the JSONB blob until the map is re-saved.

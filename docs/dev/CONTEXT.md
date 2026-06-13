@@ -64,8 +64,9 @@ Key actions:
 - `clearCellBatch(ids)` → `assigned: false`, nodeType → 'blocked'  ← ERASE TOOL
 - `resetCells()` → `assigned: false` on ALL cells
 
-When loading old maps: `normaliseCells()` in `loadMap` sets
-`assigned = c.assigned ?? (c.nodeType !== 'blocked')`
+When loading old maps: `migrateMap()` in `loadMap` applies versioned migrations.
+v1→v2: sets `assigned = c.assigned ?? (c.nodeType !== 'blocked')` on each cell.
+Maps without `schemaVersion` are treated as v1.
 
 ---
 
@@ -116,9 +117,22 @@ RAF tick    → drain both queues → setCellTypeBatch() / clearCellBatch()
 pointerup   → cancel RAF
 ```
 
+**UUID cell IDs + coordToId map:**
+Cells are created with `crypto.randomUUID()`. Pointer events hit-test to `(row, col)`,
+then look up the actual cell UUID via:
+```
+coordToId = useMemo(() => Map<'r{row}c{col}', cell.id>, [map?.cells])
+```
+Always use `coordToId.get(...)` in event handlers — never build IDs from coords directly.
+
 **Cell center memoization:**
-`cellCentersMap` = `useMemo` over all cells, returns `Map<cellId, {x, y, w, h}>`.
+`cellCenters` = `useMemo` over all cells, returns `Map<cell.id, {x, y}>` (keyed by UUID).
 Re-computes only when config or cells array reference changes.
+
+**Viewport culling:**
+`viewportBounds` React state is updated (debounced 100ms) in `applyTransform`.
+`visibleCells = useMemo(() => map.cells.filter(inBounds), [map?.cells, cellCenters, viewportBounds])`
+`CellsGroup`, `CoordsGroup`, and `CanvasOverlay` all receive `visibleCells` (not `map.cells`).
 
 **Hatch patterns:**
 Created once via `makeHatch(bg, line, tileSize, lineWidth)` and stored as data URLs.
@@ -180,9 +194,10 @@ update this file first, then update `gridStore.ts`, then update rendering.
 
 ## NodeType Gotchas
 
-- `'lane'` is a NodeType that is **set by the Draw tool** (not the Type tool)
+- `'path'` is a NodeType that is **set by the Draw tool** (not the Type tool)
   It represents a "traversable corridor" — not the same as an edge/lane.
-  This naming is confusing; `'lane'` cells are distinct from `Edge` objects.
+  (Renamed from `'lane'` in v0.19 to reduce confusion with edge/lane terminology.
+  `'path'` cells are distinct from `Edge` objects.)
 
 - `'traversable'` was added in v0.17. It's the default active type in uiStore.
   Intended for open floor / traversable areas not specifically typed.
@@ -195,9 +210,9 @@ update this file first, then update `gridStore.ts`, then update rendering.
 ## Backwards Compatibility Rules
 
 1. When adding fields to `GridCell`, always make them optional (`?`).
-2. When `loadMap` is called, run `normaliseCells()` to handle missing fields from old saves.
-3. Never change the cell ID format (`r{row}c{col}`) without a migration strategy.
-4. Never change the edge ID format (`e_{from}_{to}`) without checking for duplicate detection.
+2. When `loadMap` is called, run through `migrateMap()` — add new migration passes there.
+3. Cell IDs are now UUIDs (v0.19+). Old maps in JSONB still have `r{row}c{col}` IDs until re-saved.
+4. Edge IDs follow `e_{fromId}_{toId}`. With UUID cell IDs this makes edge IDs long — that's expected.
 
 ---
 
@@ -222,3 +237,6 @@ update this file first, then update `gridStore.ts`, then update rendering.
 | Forgetting `snapshotNow()` before batch paint  | Always call once at `pointerdown`, not inside the RAF tick      |
 | `floodFill` starting on assigned cell          | Returns `[]` — this is correct; Fill tool should no-op         |
 | Calling `setCellTypeBatch(ids, 'node')` format | Signature is `{ id, nodeType }[]` array, not `(ids, type)`     |
+| Building cell ID from coords in event handler  | Use `coordToId.get('r{row}c{col}')` — never concat IDs manually |
+| Keying `cellCenters` by coord string           | `cellCenters` is keyed by `cell.id` (UUID) since v0.19         |
+| Passing `map.cells` to `CellsGroup` directly  | Pass `visibleCells` (viewport-culled) for performance           |

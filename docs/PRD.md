@@ -89,7 +89,7 @@ Every cell has an `assigned` flag:
 | Node Type   | Color       | Sample Subtypes                                          |
 |-------------|-------------|----------------------------------------------------------|
 | traversable | #0ea5e9     | aisle, corridor, cross_aisle, staging                    |
-| lane        | #4a5568     | (internal: cells painted by draw tool)                   |
+| path        | #4a5568     | (internal: cells painted by draw tool)                   |
 | source      | #22c55e     | pick, feeder, induction, load, buffer, conveyor_in       |
 | destination | #3b82f6     | drop, put, delivery, output, deposit, conveyor_out, bin  |
 | charging    | #f59e0b     | fast_charge, slow_charge, opportunity, wireless          |
@@ -193,7 +193,7 @@ Each node type also supports a free-form custom subtype and a display label.
 ### GridCell
 ```json
 {
-  "id": "r3c7",
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "coord": { "row": 3, "col": 7 },
   "nodeType": "source",
   "assigned": true,
@@ -209,9 +209,9 @@ Each node type also supports a free-form custom subtype and a display label.
 ### Edge
 ```json
 {
-  "id": "e_r3c7_r3c8",
-  "from": "r3c7",
-  "to": "r3c8",
+  "id": "e_550e8400-e29b-41d4-a716-446655440000_a24c6f8a-c9e1-4d2b-9b9a-123456789abc",
+  "from": "550e8400-e29b-41d4-a716-446655440000",
+  "to": "a24c6f8a-c9e1-4d2b-9b9a-123456789abc",
   "direction": "E",
   "bidirectional": false,
   "cost": 1.0
@@ -220,16 +220,31 @@ Each node type also supports a free-form custom subtype and a display label.
 
 ---
 
-## 8. API Endpoints (v0.1 — unchanged)
+## 8. API Endpoints
 
-| Method | Path           | Description         |
-|--------|----------------|---------------------|
-| GET    | /api/maps      | List all maps       |
-| POST   | /api/maps      | Create new map      |
-| GET    | /api/maps/{id} | Get map by ID       |
-| PATCH  | /api/maps/{id} | Update map          |
-| DELETE | /api/maps/{id} | Delete map          |
-| GET    | /health        | Health check        |
+| Method | Path           | Description                                          |
+|--------|----------------|------------------------------------------------------|
+| GET    | /api/maps      | List maps (cursor-paginated — see below)             |
+| POST   | /api/maps      | Create new map                                       |
+| GET    | /api/maps/{id} | Get map by ID                                        |
+| PATCH  | /api/maps/{id} | Update map                                           |
+| DELETE | /api/maps/{id} | Delete map                                           |
+| GET    | /health        | Health check                                         |
+
+### GET /api/maps — Cursor-based pagination (v0.19)
+
+Query parameters:
+
+| Param    | Default | Description                                          |
+|----------|---------|------------------------------------------------------|
+| `limit`  | 50      | Max items to return (1–200)                          |
+| `cursor` | —       | Opaque cursor token from previous `X-Next-Cursor`   |
+
+Response header:
+- `X-Next-Cursor: <token>` — present when more pages exist; omitted on last page.
+  Pass this as `cursor=` on the next request.
+
+Sort order: `updated_at DESC, id ASC` (most recently modified first).
 
 ---
 
@@ -277,9 +292,9 @@ Each node type also supports a free-form custom subtype and a display label.
 | v0.1    | Core canvas, lanes, node types, undo/redo, JSON export, API       | Done         |
 | v0.11–0.17 | Hex support, validation, trace, themes, CAD export, perf     | Done         |
 | v0.18   | Custom JSON/YAML export with field name presets                   | Done         |
-| v0.19   | assigned semantics, fill fix, labels toggle, reset, keyboard fix  | Done         |
+| v0.19   | UUID cell IDs, `path` NodeType, schema migration pipeline, CanvasOverlay/ErrorBoundary, viewport culling, API pagination, Alembic | Done |
 | v0.2    | JWT auth, user accounts, map ownership, shareable read-only links | Next         |
-| v0.21   | Alembic migrations, versioned schema                              | Planned      |
+| v0.21   | Soft delete, backend coverage target, grid resize                 | Planned      |
 | v0.3    | ROS 2 / nav2 costmap export (pgm + yaml)                         | Planned      |
 | v0.4    | VDA5050-compatible graph export for AMR fleets                    | Planned      |
 | v0.5    | React Native mobile app (iOS + Android)                           | Planned      |

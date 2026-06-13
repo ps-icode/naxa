@@ -7,13 +7,13 @@ import { PANE_THEMES } from '../../lib/themes'
 import type { NodeType } from '@naxa/core'
 
 const ICONS: Record<string, string> = {
-  traversable: '◦', lane: '→', source: 'S', destination: 'D',
+  traversable: '◦', path: '→', source: 'S', destination: 'D',
   charging: '⚡', parking: 'P', blocked: '✕', junction: '✦',
 }
 
 const LAYER_INFO: Record<string, string> = {
   traversable: 'Generic passable floor: open aisles, corridors, staging areas with no special robot role.',
-  lane:        'Directed corridors with explicit travel direction. Draw edges by dragging between adjacent cells.',
+  path:        'Directed path segments with explicit travel direction. Draw edges by dragging between adjacent cells.',
   source:      'Pickup / induction points where robots begin tasks (pick, feeder, conveyor_in…).',
   destination: 'Drop-off / delivery endpoints where robots complete tasks (drop, bin, conveyor_out…).',
   charging:    'Battery charging stations. Robots route here when power is low.',

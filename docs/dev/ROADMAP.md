@@ -14,7 +14,7 @@ Legend: ✅ Done · 🔜 Next · 📋 Planned · 🔮 Future · ⚠ Concern flag
 | v0.1       | Core canvas, API, Docker, tests                              | 2026-02-26 |
 | v0.11–0.17 | Hex, validation, trace, CAD, themes, perf, rect height       | 2026-02-27 |
 | v0.18      | Custom JSON/YAML export modal with field presets             | 2026-06-14 |
-| v0.19      | assigned semantics, fill fix, labels, reset, keyboard fix    | 2026-06-14 |
+| v0.19      | UUID cell IDs, `path` NodeType, schema migration pipeline, CanvasOverlay/ErrorBoundary, viewport culling, API pagination, Alembic | 2026-06-14 |
 
 ---
 
@@ -48,17 +48,16 @@ Legend: ✅ Done · 🔜 Next · 📋 Planned · 🔮 Future · ⚠ Concern flag
 
 ---
 
-## 📋 v0.21 — Schema Migrations & Data Integrity
+## 📋 v0.21 — Data Integrity & Ownership Prep
 
-- [ ] Alembic configured and migration history established
-- [ ] First migration: add `owner_id` column
+- [ ] First Alembic migration: add `owner_id` column (prerequisite for v0.2 auth)
 - [ ] Soft delete for maps (`deleted_at` timestamp)
-- [ ] Pagination on `GET /api/maps` (cursor-based)
 - [ ] Backend test coverage target: 80%+
+- [ ] JSONB blob validator: reads all maps and checks schema version on deploy
 
 ### ⚠ Concerns
-- **No migration safety net now.** If `GridCell` or `Edge` structure changes in a way
-  that's incompatible with existing JSONB blobs, old maps will silently fail to load.
+- **JSONB blob evolution.** If `GridCell` or `Edge` structure changes in a way
+  that's incompatible with existing blobs, old maps will silently fail to load.
   A migration validator (reads all maps and checks schema) should run as part of deploy.
 
 ---
@@ -145,46 +144,30 @@ These are confirmed needs without a version slot yet:
 ## Architecture Concerns (Forward-Looking)
 
 ### 1. GridCanvas.tsx size
-**Status:** ~600 lines and growing.
-**Risk:** Becoming hard to maintain. Each new tool adds pointer-handler branches.
-**Recommendation:** Extract `TraceOverlay`, `SelectionRect`, `ValidationOverlay`,
-and `PathOverlay` as separate Konva-Layer-backed components before v0.3.
+**Status:** Overlay components extracted to `CanvasOverlay.tsx` (v0.19). File is now ~500 lines.
+**Remaining:** `EdgeLayer` and trace animation loop still inline.
+**Recommendation:** Extract `EdgeLayer` as a separate file when edge rendering grows more complex.
 
-### 2. Cell ID coupling to coordinates
-**Status:** `id = r{row}c{col}` — generated once, never changes.
-**Risk:** If grid resize is added, cells shifted in position would get new IDs,
-breaking any saved edge references.
-**Recommendation:** Before implementing grid resize, decouple cell IDs from coords.
-Generate UUIDs at cell creation (like edges already have `e_{from}_{to}`).
-This is a breaking data change requiring a migration.
+### 2. Cell ID coupling to coordinates — ✅ Resolved (v0.19)
+Cell IDs are now UUID v4 (`crypto.randomUUID()`). Grid resize and copy-paste no longer
+have an ID-collision blocker. Old maps in JSONB keep their coord-derived IDs until re-saved.
 
-### 3. No API pagination
-**Status:** `GET /api/maps` returns all maps in one response.
-**Risk:** Slow at scale; out of memory for large deployments.
-**Recommendation:** Add cursor-based pagination in v0.21 before user growth.
+### 3. No API pagination — ✅ Resolved (v0.19)
+`GET /api/maps` now supports cursor-based pagination (`limit` + `cursor` params, `X-Next-Cursor` header).
 
 ### 4. JSONB blob validation on load
-**Status:** Old maps loaded by `normaliseCells()` get `assigned` normalised.
-**Risk:** Future field additions (e.g., `priority`, `weight` on edges) won't be normalised
-unless a similar function is added. Silent data inconsistency possible.
-**Recommendation:** Create a `validateAndMigrateMap(map)` pipeline in `loadMap`
-that all normalisation passes through, with a version field on GridMap.
+**Status:** `migrateMap()` pipeline in `loadMap` (v0.19) handles schema versioning.
+`CURRENT_SCHEMA_VERSION = 2`; v1→v2 adds `assigned` field.
+**Risk:** Future field additions need a corresponding migration pass added to `migrateMap`.
+**Recommendation:** Add a deploy-time validator (reads all maps, checks schema version) in v0.21.
 
-### 5. `lane` NodeType naming confusion
-**Status:** `'lane'` is a NodeType on cells (painted by Draw tool), but "lane" colloquially
-refers to edges (the directional arrows). This confuses new contributors.
-**Recommendation:** Consider renaming `NodeType 'lane'` to `'path'` or `'corridor'`
-in a future version. Requires data migration + UI update.
+### 5. `lane` NodeType naming confusion — ✅ Resolved (v0.19)
+`NodeType 'lane'` renamed to `'path'` throughout the codebase.
 
-### 6. Performance ceiling for large grids
-**Status:** UI allows 1000×1000 (1M cells). Tests only go to 100×100 (10K cells).
-**Risk:** Konva renders all cells on every frame. At 1M cells, initial render and
-any zoom/pan would be unusably slow.
-**Recommendation:** For grids >50×50, implement viewport culling — only render
-cells visible within the current viewport bounds. This is a significant canvas
-refactor but necessary before v0.3 for warehouse-scale maps.
+### 6. Performance ceiling for large grids — ✅ Partially resolved (v0.19)
+Viewport culling added: `visibleCells` filters to current viewport bounds (debounced 100ms).
+Pan/zoom no longer renders off-screen cells. Initial render at 1M cells is still untested.
 
-### 7. No error boundary on canvas
-**Status:** If `GridCanvas` throws (Konva error, null deref), the entire app crashes.
-**Recommendation:** Wrap `GridCanvas` in a React `ErrorBoundary` that shows a
-"Canvas error — please reload" fallback and reports the error.
+### 7. No error boundary on canvas — ✅ Resolved (v0.19)
+`CanvasErrorBoundary` class component wraps `GridCanvas` in `App.tsx`.
+Shows "Canvas error — Retry" fallback on any thrown error.

@@ -47,7 +47,9 @@ apps/web/src/
 ├── App.tsx                      # Root layout, keyboard shortcuts, modal gates
 ├── components/
 │   ├── Canvas/
-│   │   └── GridCanvas.tsx       # Konva Stage: all rendering + pointer/gesture logic
+│   │   ├── GridCanvas.tsx        # Konva Stage: all rendering + pointer/gesture logic
+│   │   ├── CanvasErrorBoundary.tsx  # React class ErrorBoundary wrapping GridCanvas
+│   │   └── CanvasOverlay.tsx     # Hover, selection, path, trace overlays (extracted)
 │   ├── Export/
 │   │   └── ExportModal.tsx      # Custom JSON/YAML export modal
 │   ├── LayerPanel/
@@ -77,7 +79,7 @@ apps/web/src/
     │   ├── graph.test.ts
     │   └── performance.test.ts  # Paint/fill/BFS timing regressions
     └── store/
-        ├── gridStore.test.ts    # All store actions including clearCellBatch, normaliseCells
+        ├── gridStore.test.ts    # All store actions including clearCellBatch, UUID cell IDs
         └── uiStore.test.ts
 ```
 
@@ -122,10 +124,16 @@ apps/api/
 │   ├── models/
 │   │   └── map.py       # GridMap SQLModel table + request/response Pydantic schemas
 │   └── routes/
-│       └── maps.py      # Full CRUD: GET list, POST create, GET by id, PATCH, DELETE
+│       └── maps.py      # Full CRUD: GET list (cursor-paginated), POST, GET, PATCH, DELETE
+├── migrations/
+│   ├── env.py           # Alembic env: loads SQLModel metadata, reads DATABASE_URL
+│   ├── script.py.mako   # Template for new migration files
+│   └── versions/
+│       └── 001_initial_schema.py  # Creates grid_maps table
+├── alembic.ini          # Alembic config: script_location, DATABASE_URL from env
 └── tests/
     ├── conftest.py      # SQLite in-memory engine, monkey-patches _db.engine before imports
-    └── test_maps.py     # 11 route tests covering all CRUD operations
+    └── test_maps.py     # 14 route tests covering all CRUD + pagination operations
 ```
 
 **Key backend decisions:**
@@ -145,7 +153,7 @@ packages/core/src/index.ts
 ```
 
 Single source of truth for all domain types used across web (and future mobile) app:
-- `NodeType` union: `traversable | lane | source | destination | charging | parking | blocked | junction`
+- `NodeType` union: `traversable | path | source | destination | charging | parking | blocked | junction`
 - `SUBTYPES` map: VDA5050/MiR/Locus-inspired subtype options per node type
 - `GridCell`, `Edge`, `Layer`, `GridConfig`, `GridMap` interfaces
 - `NODE_TYPE_COLORS` — canonical hex colors per node type
@@ -187,10 +195,10 @@ infra/
 
 **Test commands:**
 ```bash
-# Frontend tests (270 tests, 100% coverage)
+# Frontend tests (278 tests, 100% coverage)
 docker run --rm -v $(pwd):/naxa -w /naxa/apps/web naxa-web:latest bun test:coverage
 
-# Backend tests (11 tests)
+# Backend tests (14 tests)
 docker run --rm -v $(pwd)/apps/api:/app naxa-api:latest uv run pytest tests/ -v
 ```
 
@@ -206,7 +214,14 @@ docker run --rm -v $(pwd)/apps/api:/app naxa-api:latest uv run pytest tests/ -v
 | RAF-batched paint                     | Prevents per-pixel re-renders during drag; single snapshot per stroke                       |
 | Pan/zoom via Konva refs               | Decouples viewport from React render cycle; eliminates jank on scroll/pinch                 |
 | `assigned` flag on GridCell           | Cleanly separates "never touched" from "explicitly set to blocked"; fixes fill/erase semantics |
-| `normaliseCells()` on loadMap         | Backwards compat for maps saved before v0.19 that lack the `assigned` field                 |
+| `migrateMap()` pipeline on loadMap    | Versioned migration (CURRENT_SCHEMA_VERSION=2); v1→v2 adds `assigned` field; extensible for future schema changes |
+| UUID cell IDs (crypto.randomUUID)     | Decouples cell identity from coordinates; required for safe grid resize and copy-paste      |
+| `coordToId` map in GridCanvas         | `Map<'r{row}c{col}', cell.id>` — pointer events hit-test coords then look up UUID; keeps event handlers O(1) |
+| Viewport culling via `visibleCells`   | `map.cells.filter(inViewportBounds)` debounced 100ms; prevents Konva from rendering off-screen cells at large grid sizes |
+| `CanvasOverlay.tsx` extraction        | Keeps GridCanvas focused on input/layout; overlays (hover, select, path, trace) are pure display components |
+| `CanvasErrorBoundary` class component | React requires class components for error boundaries; catches Konva throws without crashing the app |
+| Cursor-based API pagination           | `GET /api/maps?limit=50&cursor=<base64>` + `X-Next-Cursor` header; stable under concurrent inserts vs. offset pagination |
+| Alembic for schema migrations         | `migrations/versions/` tracked in git; `alembic upgrade head` is idempotent for prod deploys |
 | Pure `exportData.ts` (no Konva)       | Allows JSON/YAML serialization to be tested in Vitest without browser/canvas shims          |
 | Istanbul coverage (not v8)            | Bun uses JavaScriptCore; V8 coverage APIs unavailable; istanbul works via instrumentation   |
 | JSONB for grid data in Postgres       | Arrays are always read/written whole; no query filtering on individual cells needed         |

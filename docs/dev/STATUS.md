@@ -2,7 +2,7 @@
 
 **As of:** 2026-06-14
 **Branch:** production
-**Tests:** 270 frontend (100% coverage) · 11 backend
+**Tests:** 278 frontend (100% coverage) · 14 backend
 
 ---
 
@@ -73,7 +73,17 @@
 - `assigned?: boolean` field on GridCell (core semantic change)
   - `assigned: false` = unassigned/default cell → minimal hatch
   - `assigned: true` = explicitly typed → full color including red for explicit blocked
-- `normaliseCells()` for backwards compatibility on old map load
+- Schema versioning: `CURRENT_SCHEMA_VERSION = 2`; `migrateMap()` pipeline in `loadMap`
+  - v1→v2 migration: populates `assigned` field on all cells
+- Cell IDs now `crypto.randomUUID()` — no longer coord-derived (`r0c0` format retired)
+- `coordToId` map in GridCanvas: `Map<'r{row}c{col}', cell.id>` — translates pointer events → UUID cell IDs
+- `cellCenters` keyed by `cell.id` (UUID) — all canvas lookups now use UUIDs
+- NodeType `'lane'` renamed to `'path'` throughout codebase
+- `CanvasErrorBoundary` class component wraps GridCanvas in App.tsx
+- `CanvasOverlay.tsx`: hover, selection, path preview, trace animation overlays extracted from GridCanvas
+- Viewport culling: `visibleCells` useMemo filtered to viewport bounds; debounced 100ms in `applyTransform`
+- API pagination: `GET /api/maps?limit=50&cursor=<base64>` + `X-Next-Cursor` response header
+- Alembic setup: `alembic.ini` + `migrations/env.py` + `001_initial_schema.py`
 - `clearCellBatch()` new gridStore action (erase → `assigned: false`)
 - Fill tool now correctly floods only through `!assigned` cells
 - RAF dual queue: `paintQueueRef` + `eraseQueueRef` sharing one RAF tick
@@ -83,13 +93,10 @@
 - Reset Map button (↺ Reset) with confirmation dialog
 - Grid max raised from 50×50 to 1000×1000 (with perf warning at >10,000 cells)
 - Keyboard shortcuts suppressed when target is INPUT/TEXTAREA/contentEditable
-- Clearer cell borders (stronger stroke colors in BG_THEMES)
-- Minimal hatch (tone-on-tone, nearly invisible for unassigned cells)
-- LayerPanel stats and cell info panel use `!!c.assigned`
-- 270 tests, 100% coverage
 - `traversable` NodeType added to core
 - `select` tool added (rectangle region selection → bulk type apply)
 - `fill` tool added (flood fill)
+- 278 frontend tests (100% coverage), 14 backend tests
 
 ---
 
@@ -97,7 +104,7 @@
 
 | Suite                    | Tests | Coverage |
 |--------------------------|-------|----------|
-| lib/api.test.ts          | 13    | 100%     |
+| lib/api.test.ts          | 19    | 100%     |
 | lib/export.test.ts       | ~35   | 100%     |
 | lib/floodFill.test.ts    | 16    | 100%     |
 | lib/geometry.test.ts     | 46    | 100%     |
@@ -105,8 +112,8 @@
 | lib/performance.test.ts  | 12    | —        |
 | store/gridStore.test.ts  | 72    | 100%     |
 | store/uiStore.test.ts    | ~38   | 100%     |
-| **Frontend total**       | **270** | **100%** |
-| Backend (pytest)         | 11    | —        |
+| **Frontend total**       | **278** | **100%** |
+| Backend (pytest)         | 14    | —        |
 
 ---
 
@@ -115,7 +122,6 @@
 - JWT authentication and user accounts
 - Map ownership / access control
 - Shareable read-only map links
-- Alembic database migrations
 - ROS 2 costmap export (pgm + yaml)
 - VDA5050 protocol export
 - React Native mobile app
@@ -130,30 +136,21 @@
 
 ## Known Limitations / Tech Debt
 
-1. **GridCanvas.tsx is ~600 lines** — candidate for splitting into sub-components
-   (TraceOverlay, SelectionRect, EdgeLayer) when functionality expands further
+1. **GridCanvas.tsx overlay extraction** — hover/selection/path/trace overlays extracted
+   to `CanvasOverlay.tsx`; `EdgeLayer` and `TraceOverlay` still inline. File is ~500 lines.
 
-2. **Cell ID format is coordinate-derived** (`r{row}c{col}`) — prevents safe grid
-   resize, copy-paste, or cell reordering without ID collision
+2. **No grid resize** — changing rows/cols requires creating a new map; all work is lost.
+   UUID cell IDs (v0.19) remove the ID-collision blocker; resize is now technically feasible.
 
-3. **No grid resize** — changing rows/cols requires creating a new map; all work is lost
-
-4. **Label edits are not undo-tracked** — `setCellLabel` intentionally skips snapshots
+3. **Label edits are not undo-tracked** — `setCellLabel` intentionally skips snapshots
    (keeps undo stack clean for structural changes, but surprising for users)
 
-5. **`lane` NodeType is internal** — cells painted by the Draw tool are set to `lane`
-   but this isn't surfaced clearly in the UI (no layer filter, no type selector entry)
+4. **`path` NodeType is internal** — cells painted by the Draw tool are set to `path`
+   but this isn't surfaced as a layer filter or type selector entry in the UI
 
-6. **Performance at 1000×1000 is untested** — the 10,000-cell performance threshold
-   exists in tests; 1,000,000 cells is allowed by the UI but likely too slow to render
-   with Konva's canvas approach
+5. **Performance at 1000×1000 is untested** — viewport culling (v0.19) handles pan/zoom;
+   initial render at 1M cells is likely too slow. Tests only go to 100×100.
 
-7. **Backend has no pagination** — `GET /api/maps` returns all maps; will become slow
-   at scale (deferred to v0.2 with auth)
-
-8. **No Alembic migrations** — schema changes require dropping and recreating tables;
-   acceptable in pre-v0.2 single-user mode
-
-9. **SSH key not in Docker/dev session** — git push requires switching remote to HTTPS
+6. **SSH key not in Docker/dev session** — git push requires switching remote to HTTPS
    (`git remote set-url origin https://github.com/ps-icode/naxa.git`) or configuring
    SSH forwarding in the container

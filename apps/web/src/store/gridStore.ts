@@ -1,28 +1,45 @@
 import { create } from 'zustand'
 import type { GridMap, GridCell, Edge, NodeType, Direction, GridConfig } from '@naxa/core'
-import { DEFAULT_LAYERS } from '@naxa/core'
-
-function makeCellId(row: number, col: number): string {
-  return `r${row}c${col}`
-}
+import { DEFAULT_LAYERS, CURRENT_SCHEMA_VERSION } from '@naxa/core'
 
 function initCells(config: GridConfig): GridCell[] {
   const cells: GridCell[] = []
   for (let row = 0; row < config.rows; row++) {
     for (let col = 0; col < config.cols; col++) {
-      cells.push({ id: makeCellId(row, col), coord: { row, col }, nodeType: 'blocked', assigned: false })
+      cells.push({ id: crypto.randomUUID(), coord: { row, col }, nodeType: 'blocked', assigned: false })
     }
   }
   return cells
 }
 
-// Normalise cells loaded from disk/API: cells without 'assigned' field were created before
-// v0.20 — treat any non-blocked cell as assigned for backwards compat.
-function normaliseCells(cells: GridCell[]): GridCell[] {
-  return cells.map(c => ({
-    ...c,
-    assigned: c.assigned ?? (c.nodeType !== 'blocked'),
-  }))
+// ── Migration pipeline ────────────────────────────────────────────────────────
+// Each migration function takes a map at version N and returns it at version N+1.
+// Add new passes here as the schema evolves; never modify existing pass functions.
+
+// v1 → v2: introduce assigned flag (pre-v0.19 maps have no assigned field)
+function migrate_1_to_2(map: GridMap): GridMap {
+  return {
+    ...map,
+    schemaVersion: 2,
+    cells: map.cells.map(c => ({
+      ...c,
+      assigned: c.assigned ?? (c.nodeType !== 'blocked'),
+    })),
+  }
+}
+
+const MIGRATIONS: Array<(map: GridMap) => GridMap> = [
+  migrate_1_to_2,   // index 0 = v1 → v2
+]
+
+/** Runs all pending migrations on a map loaded from storage, bringing it up to CURRENT_SCHEMA_VERSION. */
+function migrateMap(map: GridMap): GridMap {
+  let current = map
+  const fromVersion = current.schemaVersion ?? 1
+  for (let v = fromVersion; v < CURRENT_SCHEMA_VERSION; v++) {
+    current = MIGRATIONS[v - 1](current)
+  }
+  return current
 }
 
 // Caps history at 50 entries (slice(-49) + new = 50 max).
@@ -78,6 +95,7 @@ export const useGridStore = create<GridStore>((set, _get) => ({
         name,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         config,
         cells: initCells(config),
         edges: [],
@@ -87,7 +105,7 @@ export const useGridStore = create<GridStore>((set, _get) => ({
       future: [],
     }),
 
-  loadMap: (map) => set({ map: { ...map, cells: normaliseCells(map.cells) }, past: [], future: [] }),
+  loadMap: (map) => set({ map: migrateMap(map), past: [], future: [] }),
   clearMap: () => set({ map: null, past: [], future: [] }),
   updateMapName: (name) => set((s) => (s.map ? { map: { ...s.map, name } } : {})),
   setSavedList: (savedList) => set({ savedList }),
