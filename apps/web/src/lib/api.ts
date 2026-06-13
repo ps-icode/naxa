@@ -35,6 +35,20 @@ export const api = {
     list: async (): Promise<GridMap[]> => {
       try { return await req<GridMap[]>('/maps') } catch { return localGet() }
     },
+
+    /** Fetch one page of maps.  Pass `nextCursor` from a previous response to advance pages. */
+    listPage: async (limit = 50, cursor?: string): Promise<{ items: GridMap[]; nextCursor: string | null }> => {
+      const params = new URLSearchParams({ limit: String(limit) })
+      if (cursor) params.set('cursor', cursor)
+      try {
+        const res = await fetch(`${BASE}/maps?${params}`, { headers: { 'Content-Type': 'application/json' } })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const items = await res.json() as GridMap[]
+        return { items, nextCursor: res.headers.get('X-Next-Cursor') }
+      } catch {
+        return { items: localGet().slice(0, limit), nextCursor: null }
+      }
+    },
     get: async (id: string): Promise<GridMap> => {
       try { return await req<GridMap>(`/maps/${id}`) } catch {
         const m = localGet().find(m => m.id === id)

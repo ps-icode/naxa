@@ -67,6 +67,80 @@ describe('api.maps.list', () => {
   })
 })
 
+// ── api.maps.listPage ─────────────────────────────────────────────────────────
+
+describe('api.maps.listPage', () => {
+  it('returns items and nextCursor from X-Next-Cursor header', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([SAMPLE_MAP]),
+      headers: { get: (h: string) => h === 'X-Next-Cursor' ? 'abc123' : null },
+    }))
+    const result = await api.maps.listPage(1)
+    expect(result.items).toEqual([SAMPLE_MAP])
+    expect(result.nextCursor).toBe('abc123')
+  })
+
+  it('returns nextCursor null when header is absent', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([SAMPLE_MAP]),
+      headers: { get: () => null },
+    }))
+    const result = await api.maps.listPage(50)
+    expect(result.nextCursor).toBeNull()
+  })
+
+  it('falls back to localStorage slice on network failure', async () => {
+    localStorage.setItem('naxa_maps', JSON.stringify([SAMPLE_MAP]))
+    stubFetchFail()
+    const result = await api.maps.listPage(50)
+    expect(result.items).toEqual([SAMPLE_MAP])
+    expect(result.nextCursor).toBeNull()
+  })
+
+  it('respects limit when falling back to localStorage', async () => {
+    const maps = [SAMPLE_MAP, { ...SAMPLE_MAP, id: 'map-2' }]
+    localStorage.setItem('naxa_maps', JSON.stringify(maps))
+    stubFetchFail()
+    const result = await api.maps.listPage(1)
+    expect(result.items).toHaveLength(1)
+  })
+
+  it('includes cursor param in request URL when cursor is provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: () => Promise.resolve([SAMPLE_MAP]),
+      headers: { get: () => null },
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await api.maps.listPage(50, 'tok123')
+    const url: string = fetchMock.mock.calls[0][0]
+    expect(url).toContain('cursor=tok123')
+  })
+
+  it('falls back to localStorage when response is not ok', async () => {
+    localStorage.setItem('naxa_maps', JSON.stringify([SAMPLE_MAP]))
+    stubFetchNotOk(500)
+    const result = await api.maps.listPage(50)
+    expect(result.items).toEqual([SAMPLE_MAP])
+    expect(result.nextCursor).toBeNull()
+  })
+
+  it('uses default limit of 50 when called with no arguments', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: () => Promise.resolve([SAMPLE_MAP]),
+      headers: { get: () => null },
+    }))
+    const result = await api.maps.listPage()
+    expect(result.items).toEqual([SAMPLE_MAP])
+    expect(result.nextCursor).toBeNull()
+  })
+})
+
 // ── api.maps.get ──────────────────────────────────────────────────────────────
 
 describe('api.maps.get', () => {
