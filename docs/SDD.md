@@ -287,14 +287,14 @@ Coverage enforced by `vitest.config.ts` thresholds — CI fails if coverage drop
 
 | File                            | Tests | Covers                                                        |
 |---------------------------------|-------|---------------------------------------------------------------|
-| lib/api.test.ts                 | 19    | fetch wrapper, listPage pagination, localStorage fallback     |
-| lib/export.test.ts              | ~35   | buildExportPayload, YAML, field presets, download             |
+| lib/api.test.ts                 | 20    | fetch wrapper, listPage pagination, localStorage fallback     |
+| lib/export.test.ts              | 42    | buildExportPayload, YAML, field presets, download             |
 | lib/floodFill.test.ts           | 16    | assigned semantics, sq/rect/hex connectivity                  |
 | lib/geometry.test.ts            | 46    | cell center/corner math for all 3 shapes                      |
 | lib/graph.test.ts               | 33    | BFS, validation, trace route building                         |
 | lib/performance.test.ts         | 12    | Paint, BFS, history timing regressions                        |
-| store/gridStore.test.ts         | 72    | All actions, UUID cell IDs, clearCellBatch, migrateMap        |
-| store/uiStore.test.ts           | ~38   | All setters, toggles, toast, selection                        |
+| store/gridStore.test.ts         | 73    | All actions, UUID cell IDs, clearCellBatch, migrateMap        |
+| store/uiStore.test.ts           | 36    | All setters, toggles, toast, selection                        |
 | **Total**                       | **278** |                                                             |
 
 ### 6.3 Test Tooling Notes

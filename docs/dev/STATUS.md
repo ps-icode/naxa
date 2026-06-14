@@ -104,14 +104,14 @@
 
 | Suite                    | Tests | Coverage |
 |--------------------------|-------|----------|
-| lib/api.test.ts          | 19    | 100%     |
-| lib/export.test.ts       | ~35   | 100%     |
+| lib/api.test.ts          | 20    | 100%     |
+| lib/export.test.ts       | 42    | 100%     |
 | lib/floodFill.test.ts    | 16    | 100%     |
 | lib/geometry.test.ts     | 46    | 100%     |
 | lib/graph.test.ts        | 33    | 100%     |
 | lib/performance.test.ts  | 12    | —        |
-| store/gridStore.test.ts  | 72    | 100%     |
-| store/uiStore.test.ts    | ~38   | 100%     |
+| store/gridStore.test.ts  | 73    | 100%     |
+| store/uiStore.test.ts    | 36    | 100%     |
 | **Frontend total**       | **278** | **100%** |
 | Backend (pytest)         | 14    | —        |
 
