@@ -33,6 +33,14 @@ apps/web/coverage/
 # Bun
 bun.lockb
 
+# SQLite artefacts
+*.db
+*.db-shm
+*.db-wal
+
+# pytest cache
+.pytest_cache/
+
 # Logs
 *.log
 npm-debug.log*
