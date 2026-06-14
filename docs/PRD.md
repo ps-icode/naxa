@@ -174,6 +174,7 @@ Each node type also supports a free-form custom subtype and a display label.
 ```json
 {
   "id": "uuid",
+  "schemaVersion": 2,
   "name": "Warehouse Floor A",
   "createdAt": "2026-06-14T00:00:00Z",
   "updatedAt": "2026-06-14T00:00:00Z",
