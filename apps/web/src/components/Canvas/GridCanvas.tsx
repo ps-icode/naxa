@@ -2,7 +2,7 @@ import React, {
   useRef, useCallback, useState, useMemo, useEffect, memo,
 } from 'react'
 import {
-  Stage, Layer, Group, Rect, RegularPolygon, Arrow, Text,
+  Stage, Layer, Group, Rect, RegularPolygon, Arrow, Text, Circle,
 } from 'react-konva'
 import type Konva from 'konva'
 import { useGridStore } from '../../store/gridStore'
