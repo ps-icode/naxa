@@ -1,0 +1,10 @@
+{
+  "name": "@naxa/e2e",
+  "private": true,
+  "scripts": {
+    "test": "docker run --rm --network=host -v \"$(pwd):/work\" -w /work -e HOME=/root mcr.microsoft.com/playwright:v1.61.1-jammy npx playwright test --config=playwright.config.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}
