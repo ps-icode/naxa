@@ -1,6 +1,6 @@
 import base64
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import and_, or_
@@ -85,7 +85,7 @@ def update_map(
         raise HTTPException(status_code=404, detail="Map not found")
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(grid_map, key, value)
-    grid_map.updated_at = datetime.utcnow()
+    grid_map.updated_at = datetime.now(timezone.utc)
     session.add(grid_map)
     session.commit()
     session.refresh(grid_map)

@@ -243,10 +243,6 @@ describe('buildTraceRoutes', () => {
 // ── hitTestEdge ───────────────────────────────────────────────────────────────
 
 describe('hitTestEdge', () => {
-  const cellMap = new Map<string, GridCell>([
-    ['a', makeCell('a')],
-    ['b', makeCell('b')],
-  ])
   const edges: Edge[] = [makeEdge('a', 'b')]
 
   const getCellCenter = (id: string): { x: number; y: number } | null => {
@@ -256,29 +252,29 @@ describe('hitTestEdge', () => {
   }
 
   it('returns edge id when point is on the edge', () => {
-    expect(hitTestEdge(50, 0, edges, cellMap, getCellCenter)).toBe('e_a_b')
+    expect(hitTestEdge(50, 0, edges, getCellCenter)).toBe('e_a_b')
   })
 
   it('returns null when point is far from any edge', () => {
-    expect(hitTestEdge(50, 100, edges, cellMap, getCellCenter)).toBeNull()
+    expect(hitTestEdge(50, 100, edges, getCellCenter)).toBeNull()
   })
 
   it('hits just inside the threshold', () => {
-    expect(hitTestEdge(50, 9, edges, cellMap, getCellCenter, 10)).toBe('e_a_b')
+    expect(hitTestEdge(50, 9, edges, getCellCenter, 10)).toBe('e_a_b')
   })
 
   it('misses just outside the threshold', () => {
-    expect(hitTestEdge(50, 11, edges, cellMap, getCellCenter, 10)).toBeNull()
+    expect(hitTestEdge(50, 11, edges, getCellCenter, 10)).toBeNull()
   })
 
   it('skips zero-length edges (both centers at same point)', () => {
     const zeroEdge = makeEdge('a', 'a')
     const sameCenter = (_id: string) => ({ x: 0, y: 0 })
-    expect(hitTestEdge(0, 0, [zeroEdge], cellMap, sameCenter)).toBeNull()
+    expect(hitTestEdge(0, 0, [zeroEdge], sameCenter)).toBeNull()
   })
 
   it('skips edges with missing cell centers', () => {
     const missingCenter = (_id: string): null => null
-    expect(hitTestEdge(50, 0, edges, cellMap, missingCenter)).toBeNull()
+    expect(hitTestEdge(50, 0, edges, missingCenter)).toBeNull()
   })
 })

@@ -1,4 +1,4 @@
-import type { Edge, GridCell, GridMap } from '@naxa/core'
+import type { Edge, GridMap } from '@naxa/core'
 import type { TraceRoute } from '../store/uiStore'
 
 function buildAdj(edges: Edge[]): Map<string, string[]> {
@@ -122,7 +122,6 @@ export function hitTestEdge(
   px: number,
   py: number,
   edges: Edge[],
-  _cellMap: Map<string, GridCell>,
   getCellCenter: (id: string) => { x: number; y: number } | null,
   threshold = 10,
 ): string | null {

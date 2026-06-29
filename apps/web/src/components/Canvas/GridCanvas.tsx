@@ -440,11 +440,6 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
   }, [flushPaintQueue])
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const cellMap = useMemo(() => {
-    if (!map) return new Map<string, GridCell>()
-    return new Map(map.cells.map(c => [c.id, c]))
-  }, [map?.cells])
-
   const cellCenters = useMemo(() => {
     if (!map) return new Map<string, { x: number; y: number }>()
     const m = new Map<string, { x: number; y: number }>()
@@ -636,7 +631,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
     } else if (tool === 'erase') {
       if (!paintStrokedRef.current) { snapshotNow(); paintStrokedRef.current = true }
       if (cellId) queueErase(cellId)
-      const edgeId = hitTestEdge(wp.x, wp.y, map.edges, cellMap, getCenterById)
+      const edgeId = hitTestEdge(wp.x, wp.y, map.edges, getCenterById)
       if (edgeId) removeEdge(edgeId)
     } else if (tool === 'path' && cellId) {
       setPathPoint(cellId)
@@ -650,7 +645,7 @@ export default function GridCanvas({ width, height, stageRef }: Props) {
         setCellTypeBatch(cellIds.map(id => ({ id, nodeType: activeNodeType })))
       }
     }
-  }, [map, tool, activeNodeType, worldPos, coordToId, snapshotNow, queuePaint, queueErase, removeEdge, cellMap,
+  }, [map, tool, activeNodeType, worldPos, coordToId, snapshotNow, queuePaint, queueErase, removeEdge,
     getCenterById, selectEdge, setSelectedCellId, setPathPoint, clearSelection, setCellTypeBatch])
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {

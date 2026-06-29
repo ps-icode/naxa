@@ -46,6 +46,8 @@ export default function App() {
       if (e.key === 'd' || e.key === 'D') { setTool('draw'); clearPath() }
       if (e.key === 't' || e.key === 'T') setTool('type')
       if (e.key === 'e' || e.key === 'E') { setTool('erase'); clearPath() }
+      if (e.key === 's' || e.key === 'S') setTool('select')
+      if (e.key === 'f' || e.key === 'F') setTool('fill')
       if (e.key === 'p' || e.key === 'P') setTool('path')
     }
     // Undo/redo

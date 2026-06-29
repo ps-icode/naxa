@@ -234,7 +234,7 @@ Extracted from `GridCanvas.tsx`. Contains four local function components:
 
 Receives `visibleCells`, `cellCenters`, path/trace state from `GridCanvas` as props.
 
-### 4.2 Toolbar.tsx
+### 4.4 Toolbar.tsx
 
 Horizontal action bar. Contains all map-level controls:
 - Tool buttons (with keyboard shortcut hint)
@@ -244,7 +244,7 @@ Horizontal action bar. Contains all map-level controls:
 - View toggles (Coords, Labels, Dark/Light)
 - Map operations (Validate, Export, PNG, CAD, Reset, Save)
 
-### 4.3 LayerPanel.tsx
+### 4.5 LayerPanel.tsx
 
 Left sidebar. Contains:
 - Layer toggles with cell counts and ⓘ tooltips
@@ -334,3 +334,28 @@ Edge IDs follow `e_{fromId}_{toId}` using the UUID cell IDs.
 Maps saved before this change (v1 schema) used `r{row}c{col}` IDs — these are
 migrated transparently on load via `migrateMap()` but the IDs themselves remain
 as-saved in the JSONB blob until the map is re-saved.
+
+---
+
+## 8. Performance Constraints & Improvement Plan
+
+The current implementation is correct and performs well up to ~50×50 grids (2,500 cells).
+The following are known bottlenecks that become material at larger grid sizes:
+
+### 8.1 Frontend
+
+| Bottleneck | Root cause | Recommended fix |
+|---|---|---|
+| `queue.shift()` in BFS | O(n) array shift on every dequeue step | Use a pointer-based queue: `let head = 0; while (head < q.length) { curr = q[head++]; ... }` |
+| `structuredClone(map)` per snapshot | Clones 1 M cell objects on every undo-tracked action at max grid size | Structural sharing: clone only the changed sub-array (`cells` or `edges`), keep rest by reference |
+| `cells.map(...)` scan per batch update | O(n) linear scan to find updated cells in `setCellTypeBatch` / `clearCellBatch` | Store cells internally as `Map<id, GridCell>`; derive ordered render array via `useMemo` |
+| Viewport culling debounced 100ms | Off-screen cells reach Konva renderer during fast strokes | Add culling inside the RAF paint cycle; skip queuePaint for cells outside viewport bounds |
+| `hitTestEdge` is O(edges) per pointer event | No spatial index on edges | Add a simple grid-bucket spatial index keyed by cell center region |
+
+### 8.2 Backend
+
+| Bottleneck | Root cause | Recommended fix |
+|---|---|---|
+| Full table scan on `GET /api/maps` | No index on `(updated_at DESC, id ASC)` | `CREATE INDEX ON grid_maps (updated_at DESC, id ASC)` — add as Alembic migration 002 |
+| Unbounded PATCH payload | No request body size limit | Add FastAPI `max_body_size` middleware; reject payloads > 10 MB |
+| `schemaVersion` query impossible | Stored only in cells JSONB blob, not as a column | Add `schema_version INTEGER NOT NULL DEFAULT 2` column in migration 002 |
