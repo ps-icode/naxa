@@ -26,8 +26,8 @@ function freshGrid(rows: number, cols: number, cellShape: GridConfig['cellShape'
   useGridStore.setState({
     map: null,
     savedList: [],
-    history: [],
-    historyIndex: -1,
+    past: [],
+    future: [],
   })
   useGridStore.getState().newMap('perf-test', { rows, cols, cellShape, cellSizeMeters: 1 })
 }
@@ -53,7 +53,7 @@ describe('setCellType — single cell — O(1) regardless of map density', () =>
     freshGrid(50, 50)
     // Paint all cells traversable so the map is "dense"
     const ids = useGridStore.getState().map!.cells.map(c => c.id)
-    useGridStore.getState().setCellTypeBatch(ids, 'traversable')
+    useGridStore.getState().setCellTypeBatch(ids.map(id => ({ id, nodeType: 'traversable' as const })))
 
     // Now type one more cell — must not degrade
     const targetId = useGridStore.getState().map!.cells[0].id
@@ -64,7 +64,7 @@ describe('setCellType — single cell — O(1) regardless of map density', () =>
   it('is fast on a fully typed 100×100 grid (10 000 cells)', () => {
     freshGrid(100, 100)
     const ids = useGridStore.getState().map!.cells.map(c => c.id)
-    useGridStore.getState().setCellTypeBatch(ids, 'traversable')
+    useGridStore.getState().setCellTypeBatch(ids.map(id => ({ id, nodeType: 'traversable' as const })))
 
     const targetId = useGridStore.getState().map!.cells[0].id
     const ms = elapsed(() => useGridStore.getState().setCellType(targetId, 'source'))
@@ -78,14 +78,14 @@ describe('setCellTypeBatch — scales linearly with cell count', () => {
   it('types 2500 cells (50×50) in under 100 ms', () => {
     freshGrid(50, 50)
     const ids = useGridStore.getState().map!.cells.map(c => c.id)
-    const ms = elapsed(() => useGridStore.getState().setCellTypeBatch(ids, 'traversable'))
+    const ms = elapsed(() => useGridStore.getState().setCellTypeBatch(ids.map(id => ({ id, nodeType: 'traversable' as const }))))
     expect(ms).toBeLessThan(100)
   })
 
   it('types 10 000 cells (100×100) in under 300 ms', () => {
     freshGrid(100, 100)
     const ids = useGridStore.getState().map!.cells.map(c => c.id)
-    const ms = elapsed(() => useGridStore.getState().setCellTypeBatch(ids, 'traversable'))
+    const ms = elapsed(() => useGridStore.getState().setCellTypeBatch(ids.map(id => ({ id, nodeType: 'traversable' as const }))))
     expect(ms).toBeLessThan(300)
   })
 
@@ -100,7 +100,7 @@ describe('setCellTypeBatch — scales linearly with cell count', () => {
     // Batch call
     freshGrid(20, 20)
     const ids2 = useGridStore.getState().map!.cells.map(c => c.id)
-    const batch = elapsed(() => useGridStore.getState().setCellTypeBatch(ids2, 'traversable'))
+    const batch = elapsed(() => useGridStore.getState().setCellTypeBatch(ids2.map(id => ({ id, nodeType: 'traversable' as const }))))
 
     // Batch must be meaningfully faster (at least 3×)
     expect(batch * 3).toBeLessThan(individual)

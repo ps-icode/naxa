@@ -7,7 +7,7 @@ function makeEdge(from: string, to: string, bidirectional = false): Edge {
   return { id: `e_${from}_${to}`, from, to, direction: 'E', bidirectional, cost: 1 }
 }
 
-function makeCell(id: string, nodeType: GridCell['nodeType'] = 'lane'): GridCell {
+function makeCell(id: string, nodeType: GridCell['nodeType'] = 'path'): GridCell {
   return { id, coord: { row: 0, col: 0 }, nodeType }
 }
 
