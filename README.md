@@ -204,45 +204,29 @@ naxa/
 
 ## Architecture Overview
 
-```
-┌───────────────────────────────────────────────────────────────────────┐
-│                          Browser / Tablet                              │
-│                                                                        │
-│  ┌─────────────────────────────────────────────────────────────────┐  │
-│  │                    React App  (Vite + Bun)                      │  │
-│  │                                                                  │  │
-│  │  ┌──────────────────────┐    ┌──────────────────────────────┐   │  │
-│  │  │    Zustand Stores    │    │   React-Konva Canvas          │   │  │
-│  │  │  ┌──────────────┐   │◄───│   CellsGroup (memoized)      │   │  │
-│  │  │  │  gridStore   │   │    │   EdgesGroup (memoized)      │   │  │
-│  │  │  │  map data    │   │    │   CanvasOverlay               │   │  │
-│  │  │  │  undo/redo   │   │    │   (hover, select, path,       │   │  │
-│  │  │  └──────────────┘   │    │    trace — extracted)         │   │  │
-│  │  │  ┌──────────────┐   │    └──────────────────────────────┘   │  │
-│  │  │  │  uiStore     │   │                                        │  │
-│  │  │  │  tool/zoom   │   │    ┌──────────────────────────────┐   │  │
-│  │  │  │  pan/modal   │   │    │   lib/                        │   │  │
-│  │  │  └──────────────┘   │    │   graph.ts  (BFS, validation) │   │  │
-│  │  └──────────┬───────────┘    │   geometry.ts (cell math)    │   │  │
-│  │             │                │   floodFill.ts               │   │  │
-│  │             │ REST + localStorage fallback                   │   │  │
-│  └─────────────┼───────────────────────────────────────────────┘  │
-└────────────────┼──────────────────────────────────────────────────────┘
-                 │
-                 ▼
-┌───────────────────────────────┐
-│   FastAPI  (Uvicorn)          │
-│   /api/maps  (CRUD)           │
-│   cursor-based pagination     │
-│   SQLModel ORM                │
-└───────────────┬───────────────┘
-                │
-                ▼
-┌───────────────────────────────┐
-│   PostgreSQL 16               │
-│   table: grid_maps            │
-│   JSONB: cells, edges, layers │
-└───────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Browser["Browser / Tablet"]
+        subgraph React["React App — Vite + Bun"]
+            GS["gridStore\nmap · cells · edges\nundo/redo history"]
+            US["uiStore\ntool · zoom · pan\nmodals · toast · trace"]
+            KC["React-Konva Canvas\nCellsGroup · EdgesGroup\nCanvasOverlay"]
+            LIB["lib/\ngraph.ts — BFS · validation\ngeometry.ts — cell math\nfloodFill.ts · exportData.ts"]
+            AT["api.ts\nfetch wrapper +\nlocalStorage fallback"]
+        end
+    end
+
+    subgraph Server["Docker Compose"]
+        FA["FastAPI (Uvicorn)\n/api/maps CRUD\ncursor pagination\nSQLModel ORM"]
+        PG[("PostgreSQL 16\ngrid_maps\nJSONB: cells · edges\nlayers · config")]
+    end
+
+    KC -- reads/writes --> GS
+    KC -- reads --> US
+    GS --> AT
+    AT -- "REST JSON\n(PATCH · GET · POST · DELETE)" --> FA
+    AT -. "offline fallback" .-> AT
+    FA -- SQLAlchemy --> PG
 ```
 
 Key design decisions:

@@ -7,78 +7,57 @@
 
 ## 1. System Block Diagram
 
-```
-╔══════════════════════════════════════════════════════════════════════╗
-║                         Client (Browser / Tablet)                   ║
-║                                                                      ║
-║  ┌───────────────────────────────────────────────────────────────┐  ║
-║  │                  React App  (Vite dev / prod build)           │  ║
-║  │                                                               │  ║
-║  │  ┌──────────────────────┐   ┌─────────────────────────────┐  │  ║
-║  │  │    Zustand Stores    │   │  React-Konva Canvas Stage   │  │  ║
-║  │  │  ┌───────────────┐  │◄──│  Layer 0: Background         │  │  ║
-║  │  │  │  gridStore    │  │   │  Layer 1: Cells (memoized)   │  │  ║
-║  │  │  │  ─ map data   │  │   │  Layer 2: Edges (memoized)   │  │  ║
-║  │  │  │  ─ undo stack │  │   │  Layer 3: Overlay            │  │  ║
-║  │  │  └───────────────┘  │   │    hover / select / path /   │  │  ║
-║  │  │  ┌───────────────┐  │   │    trace animations          │  │  ║
-║  │  │  │  uiStore      │  │   └─────────────────────────────┘  │  ║
-║  │  │  │  ─ tool/zoom  │  │                                     │  ║
-║  │  │  │  ─ pan/modal  │  │   ┌─────────────────────────────┐  │  ║
-║  │  │  └───────────────┘  │   │  lib/                        │  │  ║
-║  │  └──────────┬───────────┘   │  graph.ts  BFS, validate     │  │  ║
-║  │             │               │  geometry.ts  cell math       │  │  ║
-║  │    ┌────────▼────────┐      │  floodFill.ts  BFS fill      │  │  ║
-║  │    │   api.ts        │      │  exportData.ts  JSON/YAML    │  │  ║
-║  │    │  fetch + local  │      └─────────────────────────────┘  │  ║
-║  │    │  Storage mirror │                                        │  ║
-║  │    └────────┬────────┘                                        │  ║
-║  └─────────────┼───────────────────────────────────────────────┘  ║
-╚════════════════╪═════════════════════════════════════════════════════╝
-                 │ HTTP / REST  (JSON)
-                 │ fallback: localStorage
-                 ▼
-╔════════════════════════════════════════╗
-║   FastAPI  (Uvicorn)                   ║
-║   ─ /api/maps  full CRUD              ║
-║   ─ cursor-based pagination            ║
-║   ─ SQLModel ORM + Pydantic v2        ║
-║   ─ CORS + lifespan startup           ║
-╚═══════════════════════╦════════════════╝
-                        │ SQLAlchemy / psycopg2
-                        ▼
-╔════════════════════════════════════════╗
-║   PostgreSQL 16                        ║
-║   table: grid_maps                     ║
-║   ─ id (UUID PK)                      ║
-║   ─ name, created_at, updated_at      ║
-║   ─ config     JSONB                  ║
-║   ─ cells      JSONB  (GridCell[])    ║
-║   ─ edges      JSONB  (Edge[])        ║
-║   ─ layers     JSONB  (Layer[])       ║
-╚════════════════════════════════════════╝
+```mermaid
+graph TB
+    subgraph Browser["Client — Browser / Tablet"]
+        subgraph React["React App (Vite + Bun)"]
+            direction TB
+            GS["gridStore\nmap · cells · edges\nundo/redo history"]
+            US["uiStore\ntool · zoom · pan\nmodals · toast · trace"]
+            KC["React-Konva Canvas\nLayer 0 background\nLayer 1 cells · memoized\nLayer 2 edges · memoized\nLayer 3 overlay"]
+            LIB["lib/\ngraph.ts — BFS · validation\ngeometry.ts — cell math\nfloodFill.ts\nexportData.ts — JSON/YAML"]
+            AT["api.ts\nfetch wrapper\nlocalStorage fallback"]
+        end
+    end
+
+    subgraph Infra["Docker Compose"]
+        FA["FastAPI (Uvicorn)\n/api/maps — full CRUD\ncursor-based pagination\nSQLModel ORM · Pydantic v2\nCORS · lifespan startup"]
+        PG[("PostgreSQL 16\ntable: grid_maps\nid — UUID PK\nname · created_at · updated_at\nconfig — JSONB\ncells — JSONB GridCell[]\nedges — JSONB Edge[]\nlayers — JSONB Layer[]")]
+    end
+
+    KC -- reads/writes --> GS
+    KC -- reads --> US
+    GS --> AT
+    AT -- "REST JSON" --> FA
+    AT -. "offline fallback" .-> AT
+    FA -- "SQLAlchemy / psycopg2" --> PG
 ```
 
 ---
 
 ## 2. Component Hierarchy
 
-```
-App.tsx
-├── <Toolbar />                   # top bar: tools, undo/redo, trace, export, save
-├── <aside>                       # left sidebar (220 px fixed)
-│   └── <LayerPanel />            # layer toggles, cell info, stats, Load/New
-├── <main>
-│   └── <CanvasErrorBoundary>     # catches Konva throws; Retry button remounts canvas
-│       └── <GridCanvas />        # Konva Stage: all rendering + pointer/gesture logic
-│           ├── <CellsGroup />    # memoized; renders visibleCells via CellItem
-│           │   └── <CellItem />  # one Rect/RegularPolygon + optional Text per cell
-│           ├── <EdgesGroup />    # memoized; renders all edges via EdgeItem
-│           │   └── <EdgeItem />  # one Arrow per edge
-│           ├── <CoordsGroup />   # memoized; coordinate text overlays
-│           └── <CanvasOverlay /> # hover highlight, selection rect, path, trace dots
-├── <MapSetupModal />             # new-map wizard (shape, size, scale)
-└── <ExportModal />               # JSON/YAML export config + download
+```mermaid
+graph TD
+    App["App.tsx\nroot layout · keyboard shortcuts · modals"]
+
+    App --> TB["Toolbar.tsx\ntools · undo/redo · trace controls\nexport · reset · save"]
+    App --> LP["LayerPanel.tsx\nlayer toggles · cell info\nstats · Load / New Map"]
+    App --> CEB["CanvasErrorBoundary\ncatches Konva throws\nRetry button remounts canvas"]
+    App --> MSM["MapSetupModal.tsx\nnew-map wizard\nshape · size · scale"]
+    App --> EM["ExportModal.tsx\nJSON/YAML config\nfield names · coord origin · download"]
+
+    CEB --> GC["GridCanvas.tsx\nKonva Stage · pointer events\npan/zoom via refs · RAF paint queue\ncoordToId · cellCenters · visibleCells"]
+
+    GC --> CG["CellsGroup\nmemoized\nrenders visibleCells"]
+    CG --> CI["CellItem\none Rect / RegularPolygon\n+ optional Text per cell"]
+
+    GC --> EG["EdgesGroup\nmemoized\nrenders all edges"]
+    EG --> EI["EdgeItem\none Arrow per edge"]
+
+    GC --> CoG["CoordsGroup\nmemoized\ncoordinate text overlays"]
+
+    GC --> CO["CanvasOverlay.tsx\nHoverHighlight\nSelectionOverlay\nPathOverlay\nTraceOverlay"]
 ```
 
 ---
@@ -87,136 +66,116 @@ App.tsx
 
 ### 3.1 Save Map
 
-```
-User clicks Save
-       │
-       ▼
-  App / Toolbar
-  api.maps.update(id, map)
-       │
-       ├──► POST/PATCH /api/maps/{id}  ──►  FastAPI
-       │                                      │
-       │                                      ▼
-       │                                 SQLModel PATCH
-       │                                 updated_at = now()
-       │                                 session.commit()
-       │                                      │
-       │◄─────────────── GridMapRead ◄────────┘
-       │
-       ├──► localUpsert(map)  →  localStorage['naxa_maps']
-       │
-       └──► showToast('Saved')
+```mermaid
+sequenceDiagram
+    actor User
+    participant Toolbar
+    participant api as api.ts
+    participant FastAPI
+    participant DB as PostgreSQL
+    participant LS as localStorage
+
+    User->>Toolbar: clicks Save
+    Toolbar->>api: maps.update(id, map)
+    api->>FastAPI: PATCH /api/maps/{id}
+    FastAPI->>DB: UPDATE grid_maps SET cells=?, edges=?, updated_at=now()
+    DB-->>FastAPI: updated row
+    FastAPI-->>api: GridMapRead (JSON)
+    api->>LS: localUpsert(map) — mirror copy
+    api-->>Toolbar: saved map
+    Toolbar->>Toolbar: showToast("Saved")
 ```
 
 ### 3.2 Load Map
 
-```
-User clicks Load → selects a saved map
-       │
-       ▼
-  api.maps.get(id)
-       │
-       ├──► GET /api/maps/{id}  ──►  FastAPI
-       │                              │
-       │◄──── GridMapRead (JSON) ◄────┘
-       │                  (fallback: localGet() from localStorage)
-       │
-       ▼
-  gridStore.loadMap(map)
-       │
-       ▼
-  migrateMap(raw)
-  ┌─────────────────────────────────────────────┐
-  │  schemaVersion < CURRENT_SCHEMA_VERSION?    │
-  │  yes → run MIGRATIONS[v-1](map) for each   │
-  │         pending version until current       │
-  │  no  → return as-is                        │
-  └─────────────────────────────────────────────┘
-       │
-       ▼
-  set { map: migrated, past: [], future: [] }
-       │
-       ▼
-  GridCanvas re-renders with new map
-  coordToId rebuilt  ←  Map<'r{row}c{col}', cell.id>
-  cellCenters rebuilt  ← Map<cell.id, {x,y}>
+```mermaid
+flowchart TD
+    A(["User selects map from list"]) --> B["api.maps.get(id)"]
+
+    B --> C{Backend reachable?}
+    C -- yes --> D["GET /api/maps/{id} → FastAPI"]
+    C -- no --> E["localGet() from localStorage"]
+    D --> F["GridMapRead JSON"]
+    E --> F
+
+    F --> G["gridStore.loadMap(raw)"]
+    G --> H["migrateMap(raw)"]
+
+    H --> I{schemaVersion\n< CURRENT?}
+    I -- yes --> J["run MIGRATIONS[v-1] for each\npending version"]
+    J --> I
+    I -- no --> K["set map = migrated\npast = [] · future = []"]
+
+    K --> L["GridCanvas re-renders"]
+    L --> M["coordToId rebuilt\nMap of 'r{row}c{col}' → cell.id"]
+    L --> N["cellCenters rebuilt\nMap of cell.id → {x, y}"]
 ```
 
 ### 3.3 Paint Stroke (Type / Erase Tool)
 
-```
-pointerdown on canvas
-       │
-       ▼
-  snapshotNow()  ←  structuredClone(map) pushed to past[]
-       │
-       ▼
-pointermove × N  (per RAF tick, NOT per event)
-       │
-       ├──► queuePaint(cellId, nodeType)  →  paintQueueRef.set(id, type)
-       │    or queueErase(cellId)         →  eraseQueueRef.add(id)
-       │
-       ▼
-  requestAnimationFrame  (rafPaintRef — shared, drains both queues)
-       │
-       ├──► setCellTypeBatch(paintQueue entries)  →  gridStore
-       └──► clearCellBatch(eraseQueue entries)    →  gridStore
-                │
-                ▼
-            cells array updated  →  CellsGroup re-render (memoized)
+```mermaid
+sequenceDiagram
+    actor User
+    participant GC as GridCanvas.tsx
+    participant Q as paintQueueRef / eraseQueueRef
+    participant RAF as requestAnimationFrame
+    participant GS as gridStore
 
-pointerup
-       └──► paintStrokedRef = false
+    User->>GC: pointerdown on cell
+    GC->>GS: snapshotNow() — structuredClone(map) pushed to past[]
+
+    loop each pointermove event
+        User->>GC: pointermove
+        GC->>Q: queuePaint(cellId, nodeType)\nor queueErase(cellId)
+    end
+
+    RAF->>Q: drain both queues each frame tick
+    Q->>GS: setCellTypeBatch(paintEntries)
+    Q->>GS: clearCellBatch(eraseEntries)
+    GS-->>GC: cells updated → CellsGroup re-render
+
+    User->>GC: pointerup
+    GC->>GC: paintStrokedRef = false
 ```
 
-### 3.4 BFS Validation
+### 3.4 BFS Connectivity Validation
 
-```
-User clicks Validate
-       │
-       ▼
-  validateConnectivity(map)                     [lib/graph.ts]
-       │
-       ├── Build adjacency map from map.edges
-       │   (bidirectional edges add both directions)
-       │
-       ├── bfsFrom(all source cell IDs)
-       │   └── visited = Set<id> of all forward-reachable cells
-       │
-       ├── bfsFrom(all destination cell IDs)
-       │   └── visited = Set<id> of all reverse-reachable cells
-       │
-       ├── unreachableDestinations = destinations NOT in forward set
-       ├── unreachableSources      = sources NOT in reverse set
-       ├── unreachableCharging     = charging NOT in forward set
-       └── unreachableParking      = parking NOT in forward set
-              │
-              ▼
-       ValidationResult → uiStore.setValidationResult()
-              │
-              ▼
-       GridCanvas: cells in unreachable set → red border + shadow
+```mermaid
+flowchart TD
+    A(["User clicks Validate"]) --> B["validateConnectivity(map)\nlib/graph.ts"]
+    B --> C["Build adjacency map\nfrom map.edges\nbidirectional → both directions"]
+
+    C --> D["bfsFrom all source IDs\n→ forwardReachable: Set of id"]
+    C --> E["bfsFrom all destination IDs\n→ reverseReachable: Set of id"]
+
+    D --> F["unreachableDestinations\n= destinations ∉ forwardReachable"]
+    D --> G["unreachableCharging\n= charging ∉ forwardReachable"]
+    D --> H["unreachableParking\n= parking ∉ forwardReachable"]
+    E --> I["unreachableSources\n= sources ∉ reverseReachable"]
+
+    F & G & H & I --> J["ValidationResult\n→ uiStore.setValidationResult()"]
+    J --> K["GridCanvas: unreachable cells\nred border + glow shadow"]
 ```
 
 ### 3.5 API Cursor Pagination
 
-```
-Client                           FastAPI
-  │                                │
-  ├─── GET /api/maps?limit=50 ────►│
-  │                                │  SELECT ... ORDER BY updated_at DESC, id ASC
-  │                                │  LIMIT 51  (limit + 1)
-  │                                │  rows.length > 50?
-  │                                │    yes → token = base64(updated_at|id of last item)
-  │◄── 200 [ ...50 items ]  ───────┤         X-Next-Cursor: <token>
-  │    X-Next-Cursor: <token>      │
-  │                                │
-  ├─── GET /api/maps?limit=50 ────►│
-  │         &cursor=<token>        │  decode token → (dt, id)
-  │                                │  WHERE updated_at < dt
-  │                                │    OR (updated_at == dt AND id > cursor_id)
-  │◄── 200 [ ...next page ]  ──────┤
-  │    (no X-Next-Cursor = done)   │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant FastAPI
+    participant DB as PostgreSQL
+
+    Client->>FastAPI: GET /api/maps?limit=50
+    FastAPI->>DB: SELECT ... ORDER BY updated_at DESC, id ASC LIMIT 51
+    DB-->>FastAPI: 51 rows (has_more = true)
+    FastAPI->>FastAPI: token = base64(updated_at + pipe + id of item 50)
+    FastAPI-->>Client: 200 [50 items]  X-Next-Cursor: token
+
+    Client->>FastAPI: GET /api/maps?limit=50&cursor=token
+    FastAPI->>FastAPI: decode → (dt, cursor_id)\nWHERE updated_at < dt\nOR (updated_at = dt AND id > cursor_id)
+    FastAPI->>DB: SELECT ... (filtered + ordered) LIMIT 51
+    DB-->>FastAPI: remaining rows
+    FastAPI-->>Client: 200 [remaining items]\n(no X-Next-Cursor = last page)
 ```
 
 ---
